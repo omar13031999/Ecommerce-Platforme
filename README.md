@@ -65,8 +65,8 @@ cp .env.example .env.local   # fill in the values
 
 Background work (assignment queue & redistribution sweep, Google Sheets sync, delivery polling, automatic delivery
 submission, Meta sync, recurring expenses) runs from `GET /api/cron` with `Authorization: Bearer $CRON_SECRET`.
-`vercel.json` schedules it every 5 minutes on Vercel; elsewhere use any cron (e.g. `curl` from a system cron or
-Supabase `pg_cron` + `pg_net`). Each job holds a database lease, so overlapping calls are harmless.
+Recommended: Supabase `pg_cron` + `pg_net` calling it every 5 minutes (works on the Vercel Hobby plan, which only
+allows daily Vercel crons) — see `docs/deployment.md`. Each job holds a database lease, so overlapping calls are harmless.
 
 ## Tests
 

@@ -30,6 +30,11 @@ select tests.assert((select has_unmatched_items from public.orders where id = (s
 select tests.assert((select count(*) from public.order_item_costs c join public.order_items i on i.id = c.order_item_id
                      where i.order_id = (select o from t) and c.unit_cost is null) = 1, 'unmatched line has unknown (not zero) cost');
 
+-- Same phone within 7 days is flagged as a possible duplicate
+create temp table dup as select (public.upsert_external_order('google_sheets', null, '{"external_id": "GS-1002", "customer_name": "Amine", "phone": "0555 12 34 56", "items": [{"product_name":"x","quantity":1,"unit_price":1}]}'::jsonb) ->> 'order_id')::uuid as id;
+select tests.assert((select possible_duplicate_of from public.orders where id = (select id from dup)) = (select o from t), 'duplicate phone detected');
+delete from public.orders where id = (select id from dup);
+
 -- Re-import: idempotent, does not overwrite status/notes
 select public.upsert_external_order('google_sheets', null, '{"external_id": "GS-1001", "customer_name": "Amine B.", "phone": "0555123456", "items": [{"product_name":"x","quantity":1,"unit_price":1}]}'::jsonb);
 select tests.assert((select count(*) from public.orders where external_id = 'GS-1001') = 1, 'no duplicate import');
