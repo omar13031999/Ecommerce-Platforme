@@ -28,3 +28,10 @@
    ```
 
    `ENCRYPTION_KEY` must never change after integrations are configured (stored credentials would become unreadable).
+
+## Automatic setup on Vercel (used in production)
+
+`npm run build` runs `scripts/migrate.mjs` first. With the Vercel ↔ Supabase integration
+(`POSTGRES_URL_NON_POOLING`) it applies pending migrations, schedules `/api/cron` every 5 minutes via
+`pg_cron` (needs `APP_URL` + `CRON_SECRET`) and promotes `OWNER_EMAIL` to owner once that user exists in
+Supabase Auth. Redeploy after creating the owner account.

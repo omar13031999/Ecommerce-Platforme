@@ -14,7 +14,13 @@ export const maxDuration = 300;
  */
 async function handle(req: Request) {
   const auth = req.headers.get('authorization') ?? '';
-  const expected = `Bearer ${serverEnv().CRON_SECRET}`;
+  let expected: string;
+  try {
+    expected = `Bearer ${serverEnv().CRON_SECRET}`;
+  } catch (e) {
+    console.error('[cron] server environment incomplete:', (e as Error).message);
+    return NextResponse.json({ error: 'not_configured' }, { status: 503 });
+  }
   if (!safeEqual(auth, expected)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const jobs = new URL(req.url).searchParams.get('jobs')?.split(',').filter(Boolean);
   const results = await runScheduledJobs(jobs);
