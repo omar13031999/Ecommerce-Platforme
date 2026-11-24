@@ -24,7 +24,7 @@ const schema = z.object({
   customer_notes: z.string().optional(),
   delivery_fee: z.coerce.number().min(0),
   discount: z.coerce.number().min(0),
-  items: z.array(z.object({ product_id: z.string().uuid('required'), quantity: z.coerce.number().int().min(1), unit_price: z.coerce.number().min(0) })).min(1),
+  items: z.array(z.object({ product_id: z.guid('required'), quantity: z.coerce.number().int().min(1), unit_price: z.coerce.number().min(0) })).min(1),
 });
 type Values = z.input<typeof schema>;
 

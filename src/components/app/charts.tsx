@@ -4,8 +4,6 @@ import { useLocale } from 'next-intl';
 
 type Series = { key: string; label: string; color: string };
 
-const PALETTE = ['hsl(158 64% 36%)', 'hsl(217 80% 55%)', 'hsl(0 72% 55%)', 'hsl(38 92% 50%)', 'hsl(270 60% 55%)'];
-export const chartColor = (i: number) => PALETTE[i % PALETTE.length]!;
 
 function shortDate(d: string, locale: string) {
   return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-DZ-u-nu-latn' : 'fr-DZ', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(new Date(`${d}T00:00:00Z`));

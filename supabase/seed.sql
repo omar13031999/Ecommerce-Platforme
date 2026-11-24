@@ -1,0 +1,3 @@
+-- Reference data (wilayas, default expense categories, default settings) is
+-- created by the migrations. Create the first owner account with:
+--   node scripts/create-admin.mjs owner@example.com 'StrongPassword' 'Owner Name'

@@ -7,8 +7,9 @@ function intlLocale(locale: AppLocale) {
 
 export function formatDZD(value: number | string | null | undefined, locale: AppLocale = 'fr'): string {
   if (value === null || value === undefined || value === '') return '—';
-  const n = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isFinite(n)) return '—';
+  const raw = typeof value === 'string' ? Number(value) : value;
+  if (!Number.isFinite(raw)) return '—';
+  const n = Object.is(raw, -0) || Math.abs(raw) < 0.005 ? 0 : raw;
   return `${new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: 2, minimumFractionDigits: 0 }).format(n)} ${locale === 'ar' ? 'د.ج' : 'DA'}`;
 }
 
@@ -31,6 +32,7 @@ export function formatDateTime(value: string | Date | null | undefined, locale: 
   return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: 'short',
     timeStyle: 'short',
+    hourCycle: 'h23',
     timeZone: 'Africa/Algiers',
   }).format(new Date(value));
 }

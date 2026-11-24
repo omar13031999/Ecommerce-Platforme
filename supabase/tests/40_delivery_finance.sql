@@ -115,6 +115,15 @@ create temp table fs as select public.financial_summary(current_date - 5, curren
 select tests.assert(((select s from fs) -> 'profit' ->> 'net_realized')::numeric = 3250, 'net profit: ads from API, no double count of Meta top-up');
 select tests.assert(((select s from fs) -> 'ads' ->> 'total_dzd')::numeric = 2500, 'ad spend converted to DZD');
 select tests.assert(((select s from fs) -> 'warnings') ? 'double_count_confirmation' = false, 'no false double-count warning');
+-- every reporting function executes for a finance user
+select tests.assert((select count(*) from public.profit_timeseries(current_date - 5, current_date + 1)) = 7, 'profit_timeseries');
+select tests.assert((select sum(net_profit) from public.profit_timeseries(current_date - 5, current_date + 1)) = 3250, 'daily net profit sums to period net');
+select tests.assert((select count(*) from public.product_financial_stats(current_date - 5, current_date + 1)) = 2, 'product_financial_stats');
+select tests.assert((select gross_profit from public.product_financial_stats(current_date - 5, current_date + 1) where product_id = '22222222-2222-2222-2222-222222222222') > 0, 'product profit split');
+select tests.assert((select count(*) from public.agent_performance(current_date - 5, current_date + 1)) = 1, 'agent_performance');
+select tests.assert((select count(*) from public.product_operational_stats(current_date - 5, current_date + 1)) = 2, 'product_operational_stats');
+select tests.assert(jsonb_typeof(public.dashboard_operational(current_date - 5, current_date + 1)) = 'object', 'dashboard_operational');
+select tests.assert((select count(*) from public.orders_timeseries(current_date - 5, current_date + 1)) = 7, 'orders_timeseries');
 reset role;
 rollback;
 \echo 'ok'

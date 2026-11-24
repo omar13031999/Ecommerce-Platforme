@@ -78,6 +78,7 @@ returns table (
 )
 language plpgsql stable security definer set search_path = ''
 as $$
+#variable_conflict use_column
 begin
   if not public.has_permission('team.view') then
     raise exception 'forbidden' using errcode = '42501';
@@ -125,6 +126,7 @@ returns table (
 )
 language plpgsql stable security definer set search_path = ''
 as $$
+#variable_conflict use_column
 begin
   if not (public.has_permission('reports.operational') or public.has_permission('finance.view')) then
     raise exception 'forbidden' using errcode = '42501';
@@ -241,6 +243,7 @@ create or replace function public.financial_summary(p_from date, p_to date)
 returns jsonb
 language plpgsql stable security invoker set search_path = ''
 as $$
+#variable_conflict use_column
 declare
   v_buckets jsonb;
   v_totals jsonb;
@@ -375,6 +378,7 @@ returns table (day date, product_revenue numeric, gross_profit numeric, returned
                ad_spend numeric, expenses numeric, net_profit numeric)
 language plpgsql stable security invoker set search_path = ''
 as $$
+#variable_conflict use_column
 begin
   if not public.has_permission('finance.view') then
     raise exception 'forbidden' using errcode = '42501';
@@ -417,6 +421,7 @@ returns table (
 )
 language plpgsql stable security invoker set search_path = ''
 as $$
+#variable_conflict use_column
 begin
   if not public.has_permission('finance.view') then
     raise exception 'forbidden' using errcode = '42501';

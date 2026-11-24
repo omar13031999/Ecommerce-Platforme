@@ -6,7 +6,7 @@ import { fromDbError, runAction } from '@/lib/errors';
 
 const money = z.union([z.coerce.number().min(0).max(100_000_000), z.literal('').transform(() => null), z.null()]).optional();
 const productSchema = z.object({
-  id: z.string().uuid().optional(),
+  id: z.guid().optional(),
   name: z.string().trim().min(1).max(200),
   sku: z.string().trim().max(80).optional(),
   description: z.string().trim().max(2000).optional(),
@@ -45,7 +45,7 @@ export async function setProductArchived(id: string, archived: boolean) {
   return runAction(async () => {
     await requireUser('products.manage');
     const supabase = await createClient();
-    const { error } = await supabase.from('products').update({ is_archived: archived }).eq('id', z.string().uuid().parse(id));
+    const { error } = await supabase.from('products').update({ is_archived: archived }).eq('id', z.guid().parse(id));
     if (error) throw fromDbError(error);
   });
 }
@@ -53,7 +53,7 @@ export async function setProductArchived(id: string, archived: boolean) {
 export async function recalculateCosts(input: { productId: string; from: string; to: string }) {
   return runAction(async () => {
     await requireUser('finance.manage');
-    const p = z.object({ productId: z.string().uuid(), from: z.string().date(), to: z.string().date() }).parse(input);
+    const p = z.object({ productId: z.guid(), from: z.string().date(), to: z.string().date() }).parse(input);
     const supabase = await createClient();
     const { data, error } = await supabase.rpc('recalculate_item_costs', { p_product_id: p.productId, p_from: p.from, p_to: p.to });
     if (error) throw fromDbError(error);
@@ -65,7 +65,7 @@ export async function deleteAlias(id: string) {
   return runAction(async () => {
     await requireUser('products.manage');
     const supabase = await createClient();
-    const { error } = await supabase.from('product_aliases').delete().eq('id', z.string().uuid().parse(id));
+    const { error } = await supabase.from('product_aliases').delete().eq('id', z.guid().parse(id));
     if (error) throw fromDbError(error);
   });
 }
@@ -74,7 +74,7 @@ export async function deleteAlias(id: string) {
 export async function matchLabel(input: { itemId: string; productId: string }) {
   return runAction(async () => {
     await requireUser('products.manage', 'orders.manage');
-    const p = z.object({ itemId: z.string().uuid(), productId: z.string().uuid() }).parse(input);
+    const p = z.object({ itemId: z.guid(), productId: z.guid() }).parse(input);
     const supabase = await createClient();
     const { error } = await supabase.rpc('match_order_item', { p_item_id: p.itemId, p_product_id: p.productId, p_remember: true });
     if (error) throw fromDbError(error);

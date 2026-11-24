@@ -6,7 +6,7 @@ import { AppError, fromDbError, runAction } from '@/lib/errors';
 import { CONFIRMATION_STATUSES, DELIVERY_STATUSES } from '@/lib/domain/statuses';
 import { submitOrders, type SubmitResult } from '@/lib/services/delivery';
 
-const uuid = z.string().uuid();
+const uuid = z.guid();
 const uuids = z.array(uuid).min(1).max(500);
 const note = z.string().trim().max(4000).optional().transform((v) => (v ? v : undefined));
 

@@ -8,12 +8,12 @@ import { AppError, fromDbError, runAction } from '@/lib/errors';
 
 const KINDS = ['overhead', 'advertising', 'salary', 'confirmation', 'packaging', 'storage', 'delivery', 'product_purchase', 'returns', 'software', 'other'] as const;
 const ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
-const optUuid = z.string().uuid().or(z.literal('')).optional().transform((v) => v || null);
+const optUuid = z.guid().or(z.literal('')).optional().transform((v) => v || null);
 
 const expenseSchema = z.object({
-  id: z.string().uuid().optional(),
+  id: z.guid().optional(),
   title: z.string().trim().min(1).max(200),
-  category_id: z.string().uuid(),
+  category_id: z.guid(),
   amount: z.coerce.number().min(0).max(1_000_000_000),
   amount_paid: z.coerce.number().min(0).max(1_000_000_000).default(0),
   expense_date: z.string().date(),
@@ -67,13 +67,13 @@ export async function deleteExpense(id: string) {
   return runAction(async () => {
     await requireUser('expenses.manage');
     const supabase = await createClient();
-    const { error } = await supabase.from('expenses').delete().eq('id', z.string().uuid().parse(id));
+    const { error } = await supabase.from('expenses').delete().eq('id', z.guid().parse(id));
     if (error) throw fromDbError(error);
   });
 }
 
 const categorySchema = z.object({
-  id: z.string().uuid().optional(),
+  id: z.guid().optional(),
   name: z.string().trim().min(1).max(80),
   name_ar: z.string().trim().max(80).optional(),
   kind: z.enum(KINDS),
@@ -97,14 +97,14 @@ export async function deleteCategory(id: string) {
   return runAction(async () => {
     await requireUser('expenses.manage');
     const supabase = await createClient();
-    const { error } = await supabase.from('expense_categories').delete().eq('id', z.string().uuid().parse(id));
+    const { error } = await supabase.from('expense_categories').delete().eq('id', z.guid().parse(id));
     if (error) throw fromDbError(error);
   });
 }
 
 const recurringSchema = z.object({
   title: z.string().trim().min(1).max(200),
-  category_id: z.string().uuid(),
+  category_id: z.guid(),
   amount: z.coerce.number().min(0).max(1_000_000_000),
   frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly', 'custom']),
   interval_days: z.coerce.number().int().min(1).max(3650).optional(),
@@ -136,7 +136,7 @@ export async function toggleRecurring(id: string, active: boolean) {
   return runAction(async () => {
     await requireUser('expenses.manage');
     const supabase = await createClient();
-    const { error } = await supabase.from('recurring_expenses').update({ is_active: active }).eq('id', z.string().uuid().parse(id));
+    const { error } = await supabase.from('recurring_expenses').update({ is_active: active }).eq('id', z.guid().parse(id));
     if (error) throw fromDbError(error);
   });
 }

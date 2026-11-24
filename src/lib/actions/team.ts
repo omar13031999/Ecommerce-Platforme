@@ -54,7 +54,7 @@ export async function createStaffMember(input: z.input<typeof createSchema>) {
 }
 
 const updateSchema = z.object({
-  userId: z.string().uuid(),
+  userId: z.guid(),
   patch: z.object({
     full_name: z.string().trim().min(2).max(120).optional(),
     phone: z.string().trim().max(30).optional(),
@@ -90,7 +90,7 @@ export async function updateStaffMember(input: z.input<typeof updateSchema>) {
 export async function resetStaffPassword(input: { userId: string; password: string }) {
   return runAction(async () => {
     const session = await requireUser('team.manage');
-    const p = z.object({ userId: z.string().uuid(), password: z.string().min(8).max(200) }).safeParse(input);
+    const p = z.object({ userId: z.guid(), password: z.string().min(8).max(200) }).safeParse(input);
     if (!p.success) throw new AppError('weak_password');
     const supabase = await createClient();
     const { data: target } = await supabase.from('profiles').select('role').eq('id', p.data.userId).single();

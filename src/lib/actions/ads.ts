@@ -12,7 +12,7 @@ import { syncAdAccount } from '@/lib/services/meta-sync';
 export async function importMetaAccounts(connectionId: string) {
   return runAction(async () => {
     await requireUser('ads.manage');
-    const token = await getSecret<MetaToken>('connection', z.string().uuid().parse(connectionId));
+    const token = await getSecret<MetaToken>('connection', z.guid().parse(connectionId));
     if (!token) throw new AppError('integration_not_configured');
     const accounts = await metaAdAccounts(token.access_token);
     const db = createAdminClient();
@@ -27,7 +27,7 @@ export async function importMetaAccounts(connectionId: string) {
 }
 
 const accountSchema = z.object({
-  id: z.string().uuid(),
+  id: z.guid(),
   is_active: z.boolean(),
   fx_rate_to_dzd: z.union([z.coerce.number().positive().max(100000), z.literal('').transform(() => null), z.null()]),
   sync_from: z.string().date(),
@@ -51,14 +51,14 @@ export async function updateAdAccount(input: z.input<typeof accountSchema>) {
 export async function syncAdAccountNow(id: string) {
   return runAction(async () => {
     const s = await requireUser('ads.manage');
-    return syncAdAccount(z.string().uuid().parse(id), 'manual', s.userId);
+    return syncAdAccount(z.guid().parse(id), 'manual', s.userId);
   });
 }
 
 export async function mapCampaignProduct(input: { campaignId: string; productId: string; remove?: boolean }) {
   return runAction(async () => {
     await requireUser('ads.manage');
-    const p = z.object({ campaignId: z.string().min(1).max(64), productId: z.string().uuid(), remove: z.boolean().optional() }).parse(input);
+    const p = z.object({ campaignId: z.string().min(1).max(64), productId: z.guid(), remove: z.boolean().optional() }).parse(input);
     const supabase = await createClient();
     const { error } = p.remove
       ? await supabase.from('ad_campaign_products').delete().eq('campaign_id', p.campaignId).eq('product_id', p.productId)
@@ -67,7 +67,7 @@ export async function mapCampaignProduct(input: { campaignId: string; productId:
   });
 }
 
-const allocSchema = z.object({ product_id: z.string().uuid(), period_start: z.string().date(), period_end: z.string().date(), amount_dzd: z.coerce.number().min(0), note: z.string().max(500).optional() });
+const allocSchema = z.object({ product_id: z.guid(), period_start: z.string().date(), period_end: z.string().date(), amount_dzd: z.coerce.number().min(0), note: z.string().max(500).optional() });
 export async function addManualAllocation(input: z.input<typeof allocSchema>) {
   return runAction(async () => {
     await requireUser('ads.manage');
@@ -82,7 +82,7 @@ export async function deleteManualAllocation(id: string) {
   return runAction(async () => {
     await requireUser('ads.manage');
     const supabase = await createClient();
-    const { error } = await supabase.from('ad_manual_allocations').delete().eq('id', z.string().uuid().parse(id));
+    const { error } = await supabase.from('ad_manual_allocations').delete().eq('id', z.guid().parse(id));
     if (error) throw fromDbError(error);
   });
 }

@@ -16,12 +16,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const dir = dirOf(locale);
   return (
     <html lang={locale} dir={dir} suppressHydrationWarning>
-      <body
-        style={{
-          ['--font-sans' as string]: '"Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial',
-          ['--font-arabic' as string]: '"Noto Kufi Arabic", "Noto Sans Arabic", "Segoe UI", Tahoma',
-        }}
-      >
+      <body>
         <NextIntlClientProvider locale={locale} messages={messages} timeZone="Africa/Algiers">
           <Providers dir={dir}>{children}</Providers>
         </NextIntlClientProvider>

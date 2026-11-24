@@ -10,7 +10,8 @@ import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/app/page-header';
 import { StatCard } from '@/components/app/stat-card';
 import { DateRangeFilter } from '@/components/app/date-range-filter';
-import { TrendChart, chartColor } from '@/components/app/charts';
+import { TrendChart } from '@/components/app/charts';
+import { chartColor } from '@/lib/chart-colors';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { ConfirmationBadge } from '@/components/app/status-badge';
@@ -103,7 +104,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
 
 async function AgentPanel({ userId, capacity }: { userId: string; capacity: number }) {
   const t = await getTranslations();
-  const locale = (await getLocale()) as AppLocale;
   const supabase = await createClient();
   const { data: workload } = await supabase.rpc('workload_statuses');
   const statuses = (workload ?? ['new']) as string[];
@@ -143,7 +143,6 @@ async function AgentPanel({ userId, capacity }: { userId: string; capacity: numb
           </Table>
         </CardContent>
       </Card>
-      <span className="hidden">{locale}</span>
     </div>
   );
 }

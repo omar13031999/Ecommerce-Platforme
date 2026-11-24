@@ -16,7 +16,7 @@ const SCHEMAS = {
     final_no_answer_status: z.enum(['no_answer_3', 'no_answer_4', 'no_answer_5', 'no_answer_6', 'no_answer_7', 'no_answer_8', 'no_answer_9']),
     final_action: z.enum(['review', 'cancel']),
   }),
-  delivery: z.object({ auto_submit_enabled: z.boolean(), default_provider_id: z.string().uuid().nullable() }),
+  delivery: z.object({ auto_submit_enabled: z.boolean(), default_provider_id: z.guid().nullable() }),
   operational_costs: z.object({
     confirmation_cost: z.coerce.number().min(0).max(1e6), packaging_cost: z.coerce.number().min(0).max(1e6),
     storage_cost: z.coerce.number().min(0).max(1e6), other_cost: z.coerce.number().min(0).max(1e6),

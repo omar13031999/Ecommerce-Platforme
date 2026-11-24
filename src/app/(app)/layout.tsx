@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar name={session.profile.full_name || session.profile.email || ''} roleLabel={t(`team.role_${session.profile.role}`)} sections={sections} isAgent={isAgent} />
-        <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 md:p-6">{children}</main>
+        <main className="mx-auto w-full min-w-0 max-w-[1400px] flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

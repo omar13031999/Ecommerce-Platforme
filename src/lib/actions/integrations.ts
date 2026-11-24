@@ -18,7 +18,7 @@ function providerFail(e: unknown): never {
 export async function loadSpreadsheet(input: { connectionId: string; spreadsheet: string; worksheet?: string; headerRow?: number }) {
   return runAction(async () => {
     await requireUser('integrations.manage');
-    const p = z.object({ connectionId: z.string().uuid(), spreadsheet: z.string().min(5).max(300), worksheet: z.string().max(200).optional(), headerRow: z.number().int().min(1).max(1000).optional() }).parse(input);
+    const p = z.object({ connectionId: z.guid(), spreadsheet: z.string().min(5).max(300), worksheet: z.string().max(200).optional(), headerRow: z.number().int().min(1).max(1000).optional() }).parse(input);
     const id = extractSpreadsheetId(p.spreadsheet);
     if (!id) throw new AppError('invalid_input');
     try {
@@ -33,9 +33,9 @@ export async function loadSpreadsheet(input: { connectionId: string; spreadsheet
 
 const mappingSchema = z.record(z.enum(MAPPABLE_FIELDS), z.string().max(200));
 const sourceSchema = z.object({
-  id: z.string().uuid().optional(),
+  id: z.guid().optional(),
   name: z.string().trim().min(1).max(120),
-  connection_id: z.string().uuid(),
+  connection_id: z.guid(),
   spreadsheet_id: z.string().min(10).max(200),
   worksheet_title: z.string().min(1).max(200),
   header_row: z.number().int().min(1).max(1000),
@@ -72,7 +72,7 @@ export async function testSheetSource(sourceId: string) {
   return runAction(async () => {
     await requireUser('integrations.manage');
     const supabase = await createClient();
-    const { data: src } = await supabase.from('sheet_sources').select('*').eq('id', z.string().uuid().parse(sourceId)).single();
+    const { data: src } = await supabase.from('sheet_sources').select('*').eq('id', z.guid().parse(sourceId)).single();
     if (!src?.connection_id) throw new AppError('integration_not_configured');
     try {
       const token = await googleAccessToken(src.connection_id);
@@ -88,7 +88,7 @@ export async function syncSheetNow(sourceId: string) {
   return runAction(async () => {
     const s = await requireUser('integrations.manage');
     try {
-      return await syncSheetSource(z.string().uuid().parse(sourceId), 'manual', s.userId);
+      return await syncSheetSource(z.guid().parse(sourceId), 'manual', s.userId);
     } catch (e) {
       if (e instanceof Error && e.message.startsWith('missing_columns:')) throw new AppError('missing_columns', 400, Object.fromEntries(e.message.slice(16).split(',').map((c) => [c, ['missing']])));
       providerFail(e);
@@ -100,7 +100,7 @@ export async function deleteSheetSource(sourceId: string) {
   return runAction(async () => {
     await requireUser('integrations.manage');
     const supabase = await createClient();
-    const { error } = await supabase.from('sheet_sources').delete().eq('id', z.string().uuid().parse(sourceId));
+    const { error } = await supabase.from('sheet_sources').delete().eq('id', z.guid().parse(sourceId));
     if (error) throw fromDbError(error);
   });
 }
@@ -108,7 +108,7 @@ export async function deleteSheetSource(sourceId: string) {
 export async function disconnectConnection(connectionId: string) {
   return runAction(async () => {
     await requireUser('integrations.manage');
-    const id = z.string().uuid().parse(connectionId);
+    const id = z.guid().parse(connectionId);
     await deleteSecret('connection', id);
     const { createAdminClient } = await import('@/lib/supabase/admin');
     await createAdminClient().from('integration_connections').update({ status: 'revoked' }).eq('id', id);

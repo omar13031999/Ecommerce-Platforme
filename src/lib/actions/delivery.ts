@@ -12,12 +12,12 @@ import { startRun, finishRun } from '@/lib/services/sync-log';
 export async function pollProviderNow(providerId: string) {
   return runAction(async () => {
     const s = await requireUser('delivery.manage');
-    return pollProvider(z.string().uuid().parse(providerId), 'manual', s.userId);
+    return pollProvider(z.guid().parse(providerId), 'manual', s.userId);
   });
 }
 
 const settlementSchema = z.object({
-  orderId: z.string().uuid(),
+  orderId: z.guid(),
   collected_amount: z.coerce.number().min(0).nullable(),
   provider_fees: z.coerce.number().min(0).nullable(),
   transferred_amount: z.coerce.number().min(0).nullable(),
@@ -118,7 +118,7 @@ export async function importDeliveryStatuses(formData: FormData) {
 
 /** Provider credential/config management (integrations.manage). */
 const providerSchema = z.object({
-  id: z.string().uuid().optional(),
+  id: z.guid().optional(),
   code: z.enum(['manual', 'rest']),
   name: z.string().trim().min(1).max(80),
   is_active: z.boolean(),
@@ -164,7 +164,7 @@ export async function testProvider(providerId: string) {
   return runAction(async () => {
     await requireUser('integrations.manage');
     const { loadProvider } = await import('@/lib/services/delivery');
-    const { adapter, ctx } = await loadProvider(z.string().uuid().parse(providerId));
+    const { adapter, ctx } = await loadProvider(z.guid().parse(providerId));
     const db = createAdminClient();
     try {
       if (!adapter.testConnection) throw new Error('not_supported');
@@ -178,7 +178,7 @@ export async function testProvider(providerId: string) {
   });
 }
 
-const mappingSchema = z.object({ providerId: z.string().uuid(), provider_status: z.string().trim().min(1).max(120), internal_status: z.string() });
+const mappingSchema = z.object({ providerId: z.guid(), provider_status: z.string().trim().min(1).max(120), internal_status: z.string() });
 export async function saveStatusMapping(input: z.input<typeof mappingSchema>) {
   return runAction(async () => {
     await requireUser('delivery.manage');
@@ -192,7 +192,7 @@ export async function saveStatusMapping(input: z.input<typeof mappingSchema>) {
   });
 }
 
-const rateSchema = z.object({ providerId: z.string().uuid(), wilaya_code: z.coerce.number().int().min(1).max(58), home_cost: z.coerce.number().min(0).nullable(), stopdesk_cost: z.coerce.number().min(0).nullable(), return_cost: z.coerce.number().min(0).nullable() });
+const rateSchema = z.object({ providerId: z.guid(), wilaya_code: z.coerce.number().int().min(1).max(58), home_cost: z.coerce.number().min(0).nullable(), stopdesk_cost: z.coerce.number().min(0).nullable(), return_cost: z.coerce.number().min(0).nullable() });
 export async function saveRates(input: z.input<typeof rateSchema>[]) {
   return runAction(async () => {
     await requireUser('finance.manage');
