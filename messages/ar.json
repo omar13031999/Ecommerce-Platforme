@@ -361,7 +361,8 @@
     "matchTo": "ربط بـ",
     "remember": "حفظ القاعدة",
     "aliases": "قواعد المطابقة",
-    "noUnmatched": "جميع المنتجات المستوردة معروفة."
+    "noUnmatched": "جميع المنتجات المستوردة معروفة.",
+    "margin": "الهامش"
   },
   "analytics": {
     "title": "تحليل المنتجات",
@@ -675,7 +676,21 @@
     "rates": "تعريفات الناقل (التكلفة الفعلية التقديرية)",
     "homeCost": "المنزل",
     "stopdeskCost": "المكتب",
-    "returnCost": "الإرجاع"
+    "returnCost": "الإرجاع",
+    "oauthError": "لم يكتمل الربط. أعد المحاولة.",
+    "connectedOk": "تم ربط الحساب.",
+    "sample": "معاينة",
+    "fieldsRequired": "حقول إلزامية: معرف الطلبية، الاسم، الهاتف، المنتج",
+    "options": "خيارات",
+    "dateFormat": "صيغة التاريخ",
+    "dateAuto": "تلقائي",
+    "editSource": "تعديل المصدر",
+    "webhookHint": "اضبط أيضاً المفتاح السري للـ Webhook ومسارات الحقول في إعداد JSON.",
+    "noConnections": "لا يوجد حساب مربوط.",
+    "lastTest": "آخر اختبار",
+    "api_key": "مفتاح API",
+    "api_id": "معرف API",
+    "webhook_secret": "سر Webhook"
   },
   "notifications": {
     "title": "الإشعارات",

@@ -16,7 +16,10 @@ export function DateRangeFilter({ range }: { range: DateRange }) {
 
   function push(next: Record<string, string | null>) {
     const sp = new URLSearchParams(params.toString());
-    for (const [k, v] of Object.entries(next)) (v === null ? sp.delete(k) : sp.set(k, v));
+    for (const [k, v] of Object.entries(next)) {
+      if (v === null) sp.delete(k);
+      else sp.set(k, v);
+    }
     sp.delete('page');
     router.push(`${pathname}?${sp.toString()}`);
   }

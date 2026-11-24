@@ -361,7 +361,8 @@
     "matchTo": "Associer à",
     "remember": "Mémoriser la règle",
     "aliases": "Règles de correspondance",
-    "noUnmatched": "Tous les produits importés sont reconnus."
+    "noUnmatched": "Tous les produits importés sont reconnus.",
+    "margin": "Marge"
   },
   "analytics": {
     "title": "Analyse produits",
@@ -675,7 +676,21 @@
     "rates": "Tarifs transporteur (coût réel estimé)",
     "homeCost": "Domicile",
     "stopdeskCost": "Stop desk",
-    "returnCost": "Retour"
+    "returnCost": "Retour",
+    "oauthError": "La connexion n'a pas abouti. Réessayez.",
+    "connectedOk": "Compte connecté.",
+    "sample": "Aperçu",
+    "fieldsRequired": "Champs obligatoires : ID commande, nom, téléphone, produit",
+    "options": "Options",
+    "dateFormat": "Format des dates",
+    "dateAuto": "Automatique",
+    "editSource": "Modifier la source",
+    "webhookHint": "Configurez aussi la clé secrète webhook et le chemin des champs dans la configuration JSON.",
+    "noConnections": "Aucun compte connecté.",
+    "lastTest": "Dernier test",
+    "api_key": "Clé API",
+    "api_id": "Identifiant API",
+    "webhook_secret": "Secret webhook"
   },
   "notifications": {
     "title": "Notifications",
