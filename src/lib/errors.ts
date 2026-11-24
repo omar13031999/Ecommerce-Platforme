@@ -1,3 +1,5 @@
+import { ZodError } from 'zod';
+
 /**
  * Centralised error handling. Errors carry a stable `code` translated in the UI
  * (messages.errors.*). Raw database / provider messages are never shown to
@@ -49,6 +51,9 @@ export async function runAction<T>(fn: () => Promise<T>): Promise<ActionResult<T
     const data = await fn();
     return { ok: true, data };
   } catch (e) {
+    if (e instanceof ZodError) {
+      return { ok: false, error: 'invalid_input', fieldErrors: e.flatten().fieldErrors as Record<string, string[]> };
+    }
     if (e instanceof AppError) {
       return { ok: false, error: e.code, fieldErrors: e.details as Record<string, string[]> | undefined };
     }
