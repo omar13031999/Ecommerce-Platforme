@@ -773,5 +773,16 @@
     "utm_campaign": "utm_campaign",
     "meta_campaign_id": "معرف حملة ميتا",
     "meta_ad_id": "معرف إعلان ميتا"
+  },
+  "account": {
+    "title": "حسابي",
+    "changePassword": "تغيير كلمة السر",
+    "newPassword": "كلمة السر الجديدة",
+    "confirmPassword": "تأكيد كلمة السر",
+    "hint": "10 أحرف على الأقل.",
+    "mismatch": "كلمتا السر غير متطابقتين.",
+    "save": "حفظ",
+    "changed": "تم تغيير كلمة السر",
+    "menu": "حسابي"
   }
 }

@@ -96,6 +96,26 @@ try {
         [owner],
       );
       log('owner state:', JSON.stringify(d.rows[0]));
+
+      // One-shot temporary password (OWNER_TEMP_PASSWORD), applied once per value:
+      // a marker row prevents re-applying it on later builds after the owner changed it.
+      const temp = process.env.OWNER_TEMP_PASSWORD;
+      if (temp && temp.length >= 12) {
+        const { createHash } = await import('node:crypto');
+        const marker = `owner-password-${createHash('sha256').update(`${owner}:${temp}`).digest('hex').slice(0, 16)}`;
+        const done = await client.query('select 1 from public._app_migrations where name = $1', [marker]);
+        if (!done.rowCount) {
+          const schema = (await client.query("select n.nspname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where p.proname = 'gen_salt' limit 1")).rows[0]?.nspname ?? 'extensions';
+          await client.query(
+            `update auth.users set encrypted_password = ${schema}.crypt($2, ${schema}.gen_salt('bf')),
+                    email_confirmed_at = coalesce(email_confirmed_at, now()), banned_until = null, updated_at = now()
+              where lower(email) = $1`,
+            [owner, temp],
+          );
+          await client.query('insert into public._app_migrations (name) values ($1)', [marker]);
+          log('owner temporary password applied');
+        }
+      }
     }
   }
 } catch (e) {

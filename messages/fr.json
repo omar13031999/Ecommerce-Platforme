@@ -773,5 +773,16 @@
     "utm_campaign": "utm_campaign",
     "meta_campaign_id": "ID campagne Meta",
     "meta_ad_id": "ID annonce Meta"
+  },
+  "account": {
+    "title": "Mon compte",
+    "changePassword": "Changer le mot de passe",
+    "newPassword": "Nouveau mot de passe",
+    "confirmPassword": "Confirmer le mot de passe",
+    "hint": "10 caractères minimum.",
+    "mismatch": "Les mots de passe ne correspondent pas.",
+    "save": "Enregistrer",
+    "changed": "Mot de passe modifié",
+    "menu": "Mon compte"
   }
 }

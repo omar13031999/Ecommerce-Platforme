@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Languages, LogOut, Menu, X } from 'lucide-react';
+import { Bell, KeyRound, Languages, LogOut, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
@@ -65,6 +65,7 @@ function NotificationsBell() {
 
 export function Topbar({ name, roleLabel, sections, isAgent }: { name: string; roleLabel: string; sections: NavSection[]; isAgent: boolean }) {
   const t = useTranslations('common');
+  const tAccount = useTranslations('account');
   const locale = useLocale();
   const { run } = useAction();
   const [open, setOpen] = useState(false);
@@ -98,6 +99,9 @@ export function Topbar({ name, roleLabel, sections, isAgent }: { name: string; r
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link href="/account"><KeyRound className="size-4" /> {tAccount('menu')}</Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => signOut()}>
               <LogOut className="size-4" /> {t('logout')}
             </DropdownMenuItem>

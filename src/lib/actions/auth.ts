@@ -47,3 +47,17 @@ export async function setLocale(locale: string) {
     (await cookies()).set(LOCALE_COOKIE, locale, { path: '/', sameSite: 'lax', maxAge: 60 * 60 * 24 * 365 });
   });
 }
+
+const passwordSchema = z.object({ password: z.string().min(10).max(200), confirm: z.string() }).refine((v) => v.password === v.confirm, { path: ['confirm'] });
+
+/** The signed-in user changes their own password (Supabase Auth). */
+export async function changePassword(input: { password: string; confirm: string }) {
+  return runAction(async () => {
+    await requireUser();
+    const p = passwordSchema.safeParse(input);
+    if (!p.success) throw new AppError('weak_password');
+    const supabase = await createClient();
+    const { error } = await supabase.auth.updateUser({ password: p.data.password });
+    if (error) throw new AppError('weak_password');
+  });
+}
