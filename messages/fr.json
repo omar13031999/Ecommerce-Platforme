@@ -653,6 +653,8 @@
     "adapter": "Type d'intégration",
     "adapter_manual": "Manuel (sans API)",
     "adapter_rest": "API REST configurable",
+    "adapter_ecotrack": "ECOTRACK (Navex, et autres sociétés ECOTRACK)",
+    "api_token": "Token API",
     "baseUrl": "URL de base de l'API",
     "credentials": "Identifiants API (chiffrés)",
     "credentialsSet": "Identifiants enregistrés",

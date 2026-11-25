@@ -653,6 +653,8 @@
     "adapter": "نوع التكامل",
     "adapter_manual": "يدوي (بدون API)",
     "adapter_rest": "واجهة REST قابلة للضبط",
+    "adapter_ecotrack": "ECOTRACK (Navex وشركات ECOTRACK الأخرى)",
+    "api_token": "رمز API (Token)",
     "baseUrl": "الرابط الأساسي للواجهة",
     "credentials": "بيانات الواجهة (مشفرة)",
     "credentialsSet": "البيانات محفوظة",

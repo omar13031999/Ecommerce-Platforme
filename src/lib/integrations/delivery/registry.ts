@@ -1,15 +1,17 @@
 import type { DeliveryAdapter } from './types';
 import { manualAdapter } from './adapters/manual';
 import { configurableRestAdapter } from './adapters/configurable-rest';
+import { ecotrackAdapter } from './adapters/ecotrack';
 
 /**
  * Registered adapters. To add a provider-specific adapter (Yalidine, ZR
- * Express, Maystro, Ecotrack-based companies…), implement DeliveryAdapter from
+ * Express, Maystro…), implement DeliveryAdapter from
  * the provider's OFFICIAL API documentation and register it here.
  * See docs/delivery-providers.md.
  */
 const ADAPTERS: Record<string, DeliveryAdapter> = {
   [manualAdapter.code]: manualAdapter,
+  [ecotrackAdapter.code]: ecotrackAdapter,
   [configurableRestAdapter.code]: configurableRestAdapter,
 };
 

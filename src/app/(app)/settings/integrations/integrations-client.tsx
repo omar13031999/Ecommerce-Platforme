@@ -228,7 +228,7 @@ export function ProviderEditor({ adapters, appUrl, provider }: { adapters: Adapt
           ) : null}
         </div>
         <DialogFooter>
-          <Button disabled={pending || !f.name.trim()} onClick={() => run(() => saveProvider({ id: provider?.id, ...f, code: f.code as 'rest', credentials: creds }), {
+          <Button disabled={pending || !f.name.trim()} onClick={() => run(() => saveProvider({ id: provider?.id, ...f, code: f.code as 'rest' | 'ecotrack' | 'manual', credentials: creds }), {
             success: t('common.saved'), onSuccess: () => { setOpen(false); setCreds({}); },
           })}>{t('common.save')}</Button>
         </DialogFooter>

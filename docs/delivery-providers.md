@@ -1,6 +1,25 @@
 # Delivery providers
 
-## Why there is no Yalidine / ZR Express / … adapter yet
+## ECOTRACK (Navex and other ECOTRACK-based companies)
+
+Dedicated adapter (`src/lib/integrations/delivery/adapters/ecotrack.ts`), written from the official
+[ECOTRACK API Postman documentation](https://documenter.getpostman.com/view/14517169/Tz5je15g).
+
+*Paramètres → Intégrations → Nouveau transporteur → ECOTRACK*
+
+* **URL de base** — the company's ECOTRACK instance, e.g. `https://navexdelivery.ecotrack.dz`.
+* **Token API** — generated in the ECOTRACK account (sent as `Authorization: Bearer`).
+* **Configuration JSON** (optional): `{ "auto_validate": false, "ask_collection": true }` — with `auto_validate`
+  the order is also shipped (`valid/order`) right after creation; otherwise validate it in the ECOTRACK panel.
+* Statuses are read in batches of 100 with `get/orders/status?status=all` (rate limits: 50 req/min) and mapped
+  to internal statuses (overridable in *Correspondance des statuts*).
+* **Webhooks**: the payload format is not in the public documentation, so a webhook is only a trigger: tracking
+  numbers found in the body are re-read from the API with the account token. Declare the URL shown in the
+  provider dialog in ECOTRACK → Webhooks. Raw payloads are kept in `webhook_inbox`.
+* Not covered: labels (PDF requires the token; download from the panel), per-parcel fees (use *Tarifs transporteur*
+  or the COD statement import).
+
+## Why there is no Yalidine / ZR Express / … adapter yet (other providers)
 
 The brief requires using official provider documentation and never inventing endpoints, authentication or payload
 formats. While building, the providers' documentation hosts were unreachable from the build environment, so no
