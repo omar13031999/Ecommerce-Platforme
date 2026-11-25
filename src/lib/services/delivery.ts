@@ -46,11 +46,11 @@ async function buildShipmentInput(orderId: string, reference: string): Promise<S
   const db = createAdminClient();
   const { data: o, error } = await db
     .from('orders')
-    .select('id, reference, customer_name, phone, phone2, wilaya_code, commune, address, delivery_type, total_amount, delivery_fee, customer_notes, wilayas(name_fr), order_items(product_name, quantity, unit_price)')
+    .select('id, reference, customer_name, phone, phone2, wilaya_code, commune, address, delivery_type, total_amount, delivery_fee, customer_notes, wilayas(name_fr), order_items(product_name, quantity, unit_price, sku, products(sku))')
     .eq('id', orderId)
     .single();
   if (error || !o) throw new AppError('order_not_found', 404);
-  const items = (o.order_items ?? []) as { product_name: string; quantity: number; unit_price: number }[];
+  const items = (o.order_items ?? []) as unknown as { product_name: string; quantity: number; unit_price: number; sku: string | null; products: { sku: string | null } | null }[];
   const { firstName, lastName } = splitName(o.customer_name);
   const wilaya = o.wilayas as unknown as { name_fr: string } | null;
   return {
@@ -67,7 +67,7 @@ async function buildShipmentInput(orderId: string, reference: string): Promise<S
     commune: o.commune,
     address: o.address,
     deliveryType: o.delivery_type,
-    products: items.map((i) => ({ name: i.product_name, quantity: i.quantity, unitPrice: Number(i.unit_price) })),
+    products: items.map((i) => ({ name: i.product_name, quantity: i.quantity, unitPrice: Number(i.unit_price), sku: i.products?.sku || i.sku || null })),
     productsLabel: items.map((i) => `${i.product_name} x${i.quantity}`).join(', '),
     codAmount: Number(o.total_amount),
     deliveryFeeCharged: Number(o.delivery_fee),

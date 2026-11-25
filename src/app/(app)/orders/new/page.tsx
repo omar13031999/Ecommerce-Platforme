@@ -9,9 +9,10 @@ export default async function NewOrderPage() {
   const t = await getTranslations('orders');
   const locale = await getLocale();
   const supabase = await createClient();
-  const [{ data: products }, { data: wilayas }] = await Promise.all([
+  const [{ data: products }, { data: wilayas }, { data: communes }] = await Promise.all([
     supabase.from('products').select('id, name, sku, selling_price').eq('is_archived', false).order('name'),
     supabase.from('wilayas').select('code, name_fr, name_ar').order('code'),
+    supabase.from('communes').select('wilaya_code, name, has_stop_desk').eq('is_active', true).order('name').range(0, 4999),
   ]);
   return (
     <div className="mx-auto max-w-3xl">
@@ -19,6 +20,7 @@ export default async function NewOrderPage() {
       <NewOrderForm
         products={(products ?? []).map((p) => ({ ...p, selling_price: Number(p.selling_price) }))}
         wilayas={(wilayas ?? []).map((w) => ({ code: w.code, name: locale === 'ar' ? w.name_ar : w.name_fr }))}
+        communes={communes ?? []}
       />
     </div>
   );

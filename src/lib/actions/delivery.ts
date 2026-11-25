@@ -8,6 +8,7 @@ import { pollProvider } from '@/lib/services/delivery';
 import { parseTabularFile } from '@/lib/services/tabular';
 import { parseAmount, parseSheetDate } from '@/lib/integrations/google-sheets/mapping';
 import { startRun, finishRun } from '@/lib/services/sync-log';
+import { ProviderError } from '@/lib/integrations/http';
 
 export async function pollProviderNow(providerId: string) {
   return runAction(async () => {
@@ -200,5 +201,79 @@ export async function saveRates(input: z.input<typeof rateSchema>[]) {
     const supabase = await createClient();
     const { error } = await supabase.from('delivery_rates').upsert(rows, { onConflict: 'provider_id,wilaya_code' });
     if (error) throw fromDbError(error);
+  });
+}
+
+async function loadEcotrack(providerId: string) {
+  const { loadProvider } = await import('@/lib/services/delivery');
+  const loaded = await loadProvider(z.guid().parse(providerId));
+  if (loaded.provider.code !== 'ecotrack') throw new AppError('not_supported', 400);
+  return loaded;
+}
+
+function providerErr(e: unknown): never {
+  if (e instanceof ProviderError) throw new AppError(`provider_${e.kind}`, 400, { message: [e.message] });
+  throw e;
+}
+
+/** Imports the provider's commune list (exact spelling) into the communes reference table. */
+export async function importProviderCommunes(providerId: string) {
+  return runAction(async () => {
+    await requireUser('integrations.manage');
+    const { ctx } = await loadEcotrack(providerId);
+    const { listEcotrackCommunes } = await import('@/lib/integrations/delivery/adapters/ecotrack');
+    let list;
+    try { list = await listEcotrackCommunes(ctx); } catch (e) { providerErr(e); }
+    const seen = new Set<string>();
+    const rows = list.filter((c) => {
+      const k = `${c.wilayaCode}:${c.name.toLowerCase()}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).map((c) => ({ wilaya_code: c.wilayaCode, name: c.name, postal_code: c.postalCode, has_stop_desk: c.hasStopDesk, is_active: c.isActive, source: 'ecotrack' }));
+    if (!rows.length) throw new AppError('provider_validation', 400, { message: ['empty_commune_list'] });
+    const db = createAdminClient();
+    const { error: delErr } = await db.from('communes').delete().eq('source', 'ecotrack');
+    if (delErr) throw fromDbError(delErr);
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await db.from('communes').insert(rows.slice(i, i + 500));
+      if (error) throw fromDbError(error);
+    }
+    return { count: rows.length };
+  });
+}
+
+/** Creates / renames products so that SKU and name match the provider's product list exactly. */
+export async function importProviderProducts(providerId: string) {
+  return runAction(async () => {
+    await requireUser('products.manage');
+    const { ctx } = await loadEcotrack(providerId);
+    const { listEcotrackProducts } = await import('@/lib/integrations/delivery/adapters/ecotrack');
+    let list;
+    try { list = await listEcotrackProducts(ctx); } catch (e) { providerErr(e); }
+    const supabase = await createClient();
+    const { data: existing, error } = await supabase.from('products').select('id, sku, name').not('sku', 'is', null);
+    if (error) throw fromDbError(error);
+    const bySku = new Map((existing ?? []).map((p) => [String(p.sku).toLowerCase(), p]));
+    let created = 0;
+    let updated = 0;
+    let unchanged = 0;
+    const toInsert = [];
+    for (const p of list) {
+      const cur = bySku.get(p.reference.toLowerCase());
+      if (!cur) {
+        toInsert.push({ sku: p.reference, name: p.title, selling_price: 0, is_archived: !p.isActive });
+      } else if (cur.name !== p.title || cur.sku !== p.reference) {
+        const { error: upErr } = await supabase.from('products').update({ name: p.title, sku: p.reference }).eq('id', cur.id);
+        if (upErr) throw fromDbError(upErr);
+        updated++;
+      } else unchanged++;
+    }
+    for (let i = 0; i < toInsert.length; i += 200) {
+      const { error: insErr } = await supabase.from('products').insert(toInsert.slice(i, i + 200));
+      if (insErr) throw fromDbError(insErr);
+      created += Math.min(200, toInsert.length - i);
+    }
+    return { total: list.length, created, updated, unchanged };
   });
 }

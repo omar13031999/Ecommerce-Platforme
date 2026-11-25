@@ -1,4 +1,5 @@
 'use client';
+import { CommuneSelect, type CommuneOption } from '@/components/app/commune-select';
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Ban, Check, Copy, PhoneMissed, PhoneOff, Send } from 'lucide-react';
@@ -70,7 +71,7 @@ export function NoteForm({ orderId }: { orderId: string }) {
 
 type CustomerFields = { customer_name: string; phone: string; phone2: string; wilaya_code: number | null; commune: string; address: string; delivery_type: string };
 
-export function CustomerEditor({ orderId, version, initial, wilayas }: { orderId: string; version: number; initial: CustomerFields; wilayas: { code: number; name: string }[] }) {
+export function CustomerEditor({ orderId, version, initial, wilayas, communes }: { orderId: string; version: number; initial: CustomerFields; wilayas: { code: number; name: string }[]; communes: CommuneOption[] }) {
   const t = useTranslations();
   const { run, pending } = useAction();
   const [open, setOpen] = useState(false);
@@ -95,7 +96,7 @@ export function CustomerEditor({ orderId, version, initial, wilayas }: { orderId
                 {wilayas.map((w) => <option key={w.code} value={w.code}>{String(w.code).padStart(2, '0')} — {w.name}</option>)}
               </Select>
             </div>
-            <div className="grid gap-1.5"><Label>{t('orders.commune')}</Label><Input value={f.commune} onChange={(e) => set('commune', e.target.value)} /></div>
+            <div className="grid gap-1.5"><Label>{t('orders.commune')}</Label><CommuneSelect communes={communes} wilayaCode={f.wilaya_code} value={f.commune} stopDeskOnly={f.delivery_type === 'stopdesk'} onChange={(v) => set('commune', v)} /></div>
           </div>
           <div className="grid gap-1.5"><Label>{t('orders.address')}</Label><Textarea value={f.address} onChange={(e) => set('address', e.target.value)} rows={2} /></div>
           <div className="grid gap-1.5">

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ecotrackAdapter } from '@/lib/integrations/delivery/adapters/ecotrack';
+import { ecotrackAdapter, listEcotrackCommunes, listEcotrackProducts } from '@/lib/integrations/delivery/adapters/ecotrack';
 import type { AdapterContext, ShipmentInput } from '@/lib/integrations/delivery/types';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -94,5 +94,30 @@ describe('ECOTRACK adapter (official Postman documentation)', () => {
     vi.stubGlobal('fetch', f);
     await expect(ecotrackAdapter.testConnection!(ctx())).rejects.toMatchObject({ kind: 'auth' });
     expect(call(f).url.pathname).toBe('/api/v1/validate/token');
+  });
+
+  it('sends stock references and quantities when use_stock is enabled', async () => {
+    const f = vi.fn(async () => json({ success: true, tracking: 'T2' }));
+    vi.stubGlobal('fetch', f);
+    await ecotrackAdapter.createShipment!(ctx({ use_stock: true }), { ...input, products: [{ name: 'Tn Gold 41', quantity: 2, unitPrice: 1, sku: 'TG41' }, { name: 'RCS', quantity: 1, unitPrice: 1, sku: 'RCS' }] });
+    expect(Object.fromEntries(call(f).url.searchParams)).toMatchObject({ stock: '1', produit: 'TG41,RCS', quantite: '2,1' });
+    await expect(ecotrackAdapter.createShipment!(ctx({ use_stock: true }), input)).rejects.toMatchObject({ kind: 'validation' });
+  });
+
+  it('reads communes (object or array form) and products', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ 0: { nom: 'Abadla', wilaya_id: 8, code_postal: '817', has_stop_desk: 0, is_active: 1 }, 1: { nom: 'Ain Touta', wilaya_id: 5, code_postal: '545', has_stop_desk: 1, is_active: 1 } })));
+    expect(await listEcotrackCommunes(ctx())).toEqual([
+      { name: 'Abadla', wilayaCode: 8, postalCode: '817', hasStopDesk: false, isActive: true },
+      { name: 'Ain Touta', wilayaCode: 5, postalCode: '545', hasStopDesk: true, isActive: true },
+    ]);
+    const pages = [
+      { products: [{ reference: 'TG41', title: 'Tn Gold 41', is_active: 1, stock_disponible: 7 }], pagination: { current_page: 1, last_page: 2 } },
+      { products: [{ reference: 'RCS', title: 'موسع حزام الامان', is_active: 1, stock_disponible: 5 }], pagination: { current_page: 2, last_page: 2 } },
+    ];
+    const f = vi.fn(async (u: URL) => json(pages[(Number(new URL(String(u)).searchParams.get('page')) || 1) - 1]));
+    vi.stubGlobal('fetch', f);
+    const products = await listEcotrackProducts(ctx());
+    expect(products.map((p) => [p.reference, p.title])).toEqual([['TG41', 'Tn Gold 41'], ['RCS', 'موسع حزام الامان']]);
+    expect(call(f).url.pathname).toBe('/api/v1/get/products/list');
   });
 });

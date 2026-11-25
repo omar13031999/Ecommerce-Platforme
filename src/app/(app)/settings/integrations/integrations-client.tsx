@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Download, FlaskConical, Pencil, Plus, RefreshCw, Trash2, Unplug } from 'lucide-react';
+import { Download, FlaskConical, MapPin, Package, Pencil, Plus, RefreshCw, Trash2, Unplug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TBody, TD, TR } from '@/components/ui/table';
 import { useAction } from '@/components/app/use-action';
 import { deleteSheetSource, disconnectConnection, loadSpreadsheet, saveSheetSource, syncSheetNow, testSheetSource } from '@/lib/actions/integrations';
-import { saveProvider, saveRates, saveStatusMapping, testProvider } from '@/lib/actions/delivery';
+import { importProviderCommunes, importProviderProducts, saveProvider, saveRates, saveStatusMapping, testProvider } from '@/lib/actions/delivery';
 import { importMetaAccounts } from '@/lib/actions/ads';
 import { MAPPABLE_FIELDS, REQUIRED_FIELDS, type ColumnMapping, type MappableField } from '@/lib/integrations/google-sheets/mapping';
 import { DELIVERY_STATUSES } from '@/lib/domain/statuses';
@@ -257,6 +257,12 @@ export function ProviderTools({ providerId, code, mappings, canRates, rates, wil
         <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => testProvider(providerId), {
           onSuccess: (d) => (d?.ok ? toast.success(t('common.success')) : toast.error(t('integrations.testFailed', { error: d?.error ?? '' }))),
         })}><FlaskConical />{t('integrations.testConnection')}</Button>
+      ) : null}
+      {code === 'ecotrack' ? (
+        <>
+          <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => importProviderCommunes(providerId), { success: (d) => t('integrations.communesImported', { count: d?.count ?? 0 }) })}><MapPin />{t('integrations.importCommunes')}</Button>
+          <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => importProviderProducts(providerId), { success: (d) => t('integrations.productsImported', { total: d?.total ?? 0, created: d?.created ?? 0, updated: d?.updated ?? 0 }) })}><Package />{t('integrations.importProducts')}</Button>
+        </>
       ) : null}
       {code !== 'manual' ? (
         <Dialog>

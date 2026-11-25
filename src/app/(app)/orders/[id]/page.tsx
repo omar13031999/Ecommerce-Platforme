@@ -36,7 +36,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
   const canFinance = session.can('finance.view');
   const canDeliveryView = session.can('delivery.view');
-  const [items, events, notes, staff, redistributions, deliveryEvents, providers, profit, products, wilayas] = await Promise.all([
+  const [items, events, notes, staff, redistributions, deliveryEvents, providers, profit, products, wilayas, communes] = await Promise.all([
     supabase.from('order_items').select('id, product_id, product_name, sku, variant, quantity, unit_price, line_total, match_status').eq('order_id', id).order('created_at'),
     supabase.from('order_events').select('*').eq('order_id', id).order('created_at', { ascending: false }).limit(300),
     supabase.from('order_notes').select('id, author_id, body, created_at').eq('order_id', id).order('created_at', { ascending: false }),
@@ -47,6 +47,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     canFinance ? supabase.from('order_profit').select('*').eq('order_id', id).maybeSingle() : Promise.resolve({ data: null }),
     session.can('products.manage') || session.can('orders.manage') ? supabase.from('products').select('id, name, sku').eq('is_archived', false).order('name') : Promise.resolve({ data: [] }),
     supabase.from('wilayas').select('code, name_fr, name_ar').order('code'),
+    supabase.from('communes').select('wilaya_code, name, has_stop_desk').eq('is_active', true).order('name').range(0, 4999),
   ]);
   const names: Record<string, string> = Object.fromEntries((staff.data ?? []).map((s) => [s.id, s.full_name]));
   const { data: provider } = order.delivery_provider_id
@@ -120,6 +121,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                   version={order.version}
                   initial={{ customer_name: order.customer_name, phone: order.phone, phone2: order.phone2 ?? '', wilaya_code: order.wilaya_code, commune: order.commune ?? '', address: order.address ?? '', delivery_type: order.delivery_type }}
                   wilayas={(wilayas.data ?? []).map((w) => ({ code: w.code, name: locale === 'ar' ? w.name_ar : w.name_fr }))}
+                  communes={communes.data ?? []}
                 />
               ) : null}
             </CardHeader>

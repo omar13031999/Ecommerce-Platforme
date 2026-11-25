@@ -203,6 +203,7 @@
     "phone": "Téléphone",
     "phone2": "Téléphone 2",
     "wilaya": "Wilaya",
+    "communeUnknown": "non reconnue",
     "commune": "Commune",
     "address": "Adresse complète",
     "deliveryType": "Type de livraison",
@@ -696,6 +697,10 @@
     "accessMode": "Mode d'accès",
     "publicLink": "Lien de partage public (sans clés Google)",
     "publicLinkHelp": "Dans Google Sheets : Partager → Accès général → « Tous les utilisateurs disposant du lien » (Lecteur), puis collez ici le lien de l'onglet (il contient #gid=…). Toute personne ayant ce lien peut lire la feuille : ne le diffusez pas.",
+    "importCommunes": "Importer les communes",
+    "communesImported": "{count} communes importées",
+    "importProducts": "Importer les produits",
+    "productsImported": "{total} produits : {created} créé(s), {updated} mis à jour",
     "columnsFound": "Colonnes lues dans la feuille :",
     "googleOptional": "Connexion Google facultative : vous pouvez importer via un lien de partage public. Pour un accès privé, configurez GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET."
   },

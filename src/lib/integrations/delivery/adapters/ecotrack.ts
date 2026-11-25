@@ -24,10 +24,12 @@ import type { DeliveryStatus } from '@/lib/domain/statuses';
  * API, never from the unauthenticated body). Raw payloads stay in webhook_inbox.
  *
  * Optional provider config (JSON):
- *   { "auto_validate": false, "ask_collection": true, "operation_type": 1 }
+ *   { "auto_validate": false, "ask_collection": true, "operation_type": 1, "use_stock": false }
+ * use_stock: the parcel is prepared from the stock held by the company
+ * (stock=1, produit = product references, quantite = quantities).
  */
 
-type EcotrackConfig = { auto_validate?: boolean; ask_collection?: boolean; operation_type?: number };
+type EcotrackConfig = { auto_validate?: boolean; ask_collection?: boolean; operation_type?: number; use_stock?: boolean };
 
 const MAX_TRACKINGS_PER_CALL = 100;
 
@@ -212,6 +214,13 @@ export const ecotrackAdapter: DeliveryAdapter = {
       type: c.operation_type ?? 1,
       stop_desk: input.deliveryType === 'stopdesk' ? 1 : 0,
     };
+    if (c.use_stock) {
+      const missing = input.products.filter((p) => !p.sku?.trim());
+      if (missing.length) throw new ProviderError('validation', `missing_sku: ${missing.map((p) => p.name).join(', ')}`.slice(0, 300));
+      query.stock = 1;
+      query.produit = cut(input.products.map((p) => p.sku!.trim()).join(','));
+      query.quantite = input.products.map((p) => p.quantity).join(',');
+    }
     if (input.phone2 && digits(input.phone2)) query.telephone_2 = digits(input.phone2);
     if (input.notes?.trim()) query.remarque = cut(input.notes);
 
@@ -275,3 +284,40 @@ export const ecotrackAdapter: DeliveryAdapter = {
     return { kind: 'events', valid: true, events: toEvents(await fetchStatuses(ctx, [...found].slice(0, 300))) };
   },
 };
+
+export type EcotrackCommune = { name: string; wilayaCode: number; postalCode: string | null; hasStopDesk: boolean; isActive: boolean };
+export type EcotrackProduct = { reference: string; title: string; isActive: boolean; stock: number | null };
+
+/** GET /api/v1/get/communes — deliverable communes, spelled as ECOTRACK expects them. */
+export async function listEcotrackCommunes(ctx: AdapterContext): Promise<EcotrackCommune[]> {
+  const { data } = await httpJson<unknown>({ url: url(ctx, '/api/v1/get/communes'), method: 'GET', headers: auth(ctx), timeoutMs: 45000 });
+  const list = Array.isArray(data) ? data : data && typeof data === 'object' ? Object.values(data as Record<string, unknown>) : [];
+  return list.flatMap((c) => {
+    const x = c as { nom?: string; wilaya_id?: number | string; code_postal?: string | number | null; has_stop_desk?: number | boolean; is_active?: number | boolean };
+    const wilayaCode = Number(x.wilaya_id);
+    if (!x.nom?.trim() || !Number.isInteger(wilayaCode) || wilayaCode < 1 || wilayaCode > 58) return [];
+    return [{
+      name: x.nom.trim(), wilayaCode, postalCode: x.code_postal != null && x.code_postal !== '' ? String(x.code_postal) : null,
+      hasStopDesk: Boolean(Number(x.has_stop_desk)), isActive: x.is_active === undefined ? true : Boolean(Number(x.is_active)),
+    }];
+  });
+}
+
+/** GET /api/v1/get/products/list — products stored at the delivery company (paginated). */
+export async function listEcotrackProducts(ctx: AdapterContext): Promise<EcotrackProduct[]> {
+  const out = new Map<string, EcotrackProduct>();
+  for (let page = 1; page <= 100; page++) {
+    const { data } = await httpJson<{ products?: { reference?: string | number; title?: string; is_active?: number; stock_disponible?: number }[]; pagination?: { current_page?: number; last_page?: number } }>({
+      url: url(ctx, '/api/v1/get/products/list'), method: 'GET', headers: auth(ctx), query: page > 1 ? { page } : {},
+    });
+    for (const p of data?.products ?? []) {
+      const reference = String(p.reference ?? '').trim();
+      if (!reference || !p.title?.trim()) continue;
+      out.set(reference.toLowerCase(), { reference, title: p.title.trim(), isActive: p.is_active === undefined ? true : Boolean(Number(p.is_active)), stock: typeof p.stock_disponible === 'number' ? p.stock_disponible : null });
+    }
+    const pg = data?.pagination;
+    // Stop on the last page, or if the API ignores the page parameter.
+    if (!pg?.last_page || page >= pg.last_page || (pg.current_page !== undefined && pg.current_page !== page)) break;
+  }
+  return [...out.values()];
+}

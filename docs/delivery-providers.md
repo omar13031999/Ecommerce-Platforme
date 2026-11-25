@@ -9,8 +9,14 @@ Dedicated adapter (`src/lib/integrations/delivery/adapters/ecotrack.ts`), writte
 
 * **URL de base** — the company's ECOTRACK instance, e.g. `https://navexdelivery.ecotrack.dz`.
 * **Token API** — generated in the ECOTRACK account (sent as `Authorization: Bearer`).
-* **Configuration JSON** (optional): `{ "auto_validate": false, "ask_collection": true }` — with `auto_validate`
+* **Configuration JSON** (optional): `{ "auto_validate": false, "ask_collection": true, "use_stock": false }` — with `auto_validate`
   the order is also shipped (`valid/order`) right after creation; otherwise validate it in the ECOTRACK panel.
+* **Importer les communes** fills the communes reference table with the company's exact spelling (`get/communes`);
+  the order forms then offer a commune list filtered by wilaya (stop-desk communes only for stop-desk orders).
+* **Importer les produits** creates/renames products so SKU = ECOTRACK reference and name = ECOTRACK title
+  (`get/products/list`). Selling prices and costs stay to be filled in the platform.
+* `"use_stock": true` sends parcels prepared from the stock held by the company (`stock=1`, `produit` = references,
+  `quantite` = quantities); every order line must then be matched to a product with a SKU.
 * Statuses are read in batches of 100 with `get/orders/status?status=all` (rate limits: 50 req/min) and mapped
   to internal statuses (overridable in *Correspondance des statuts*).
 * **Webhooks**: the payload format is not in the public documentation, so a webhook is only a trigger: tracking

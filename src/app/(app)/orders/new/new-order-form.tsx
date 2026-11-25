@@ -1,4 +1,5 @@
 'use client';
+import { CommuneSelect, type CommuneOption } from '@/components/app/commune-select';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useFieldArray, useForm } from 'react-hook-form';
@@ -28,7 +29,7 @@ const schema = z.object({
 });
 type Values = z.input<typeof schema>;
 
-export function NewOrderForm({ products, wilayas }: { products: { id: string; name: string; sku: string | null; selling_price: number }[]; wilayas: { code: number; name: string }[] }) {
+export function NewOrderForm({ products, wilayas, communes }: { products: { id: string; name: string; sku: string | null; selling_price: number }[]; wilayas: { code: number; name: string }[]; communes: CommuneOption[] }) {
   const t = useTranslations();
   const locale = useLocale() as AppLocale;
   const router = useRouter();
@@ -66,7 +67,10 @@ export function NewOrderForm({ products, wilayas }: { products: { id: string; na
             </Select>
             {err('wilaya_code')}
           </div>
-          <div className="grid gap-1.5"><Label>{t('orders.commune')}</Label><Input {...form.register('commune')} />{err('commune')}</div>
+          <div className="grid gap-1.5"><Label>{t('orders.commune')}</Label>
+            <CommuneSelect communes={communes} wilayaCode={Number(form.watch('wilaya_code'))} value={form.watch('commune') ?? ''}
+              stopDeskOnly={form.watch('delivery_type') === 'stopdesk'}
+              onChange={(v) => form.setValue('commune', v, { shouldValidate: true })} />{err('commune')}</div>
           <div className="grid gap-1.5">
             <Label>{t('orders.deliveryType')}</Label>
             <Select {...form.register('delivery_type')}><option value="home">{t('orders.home')}</option><option value="stopdesk">{t('orders.stopdesk')}</option></Select>
