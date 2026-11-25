@@ -3,7 +3,8 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Plus } from 'lucide-react';
 import { requirePage } from '@/lib/auth/session';
 import { createClient } from '@/lib/supabase/server';
-import { applyOrderFilters, orderSelect, sortOf, type OrderSearchParams } from '@/lib/orders-query';
+import { applyOrderFilters, orderSelect, sortOf, TO_PROCESS_DELIVERY, type OrderSearchParams } from '@/lib/orders-query';
+import { cn } from '@/lib/utils';
 import { fromDbError } from '@/lib/errors';
 import { PageHeader } from '@/components/app/page-header';
 import { Pagination } from '@/components/app/pagination';
@@ -31,6 +32,16 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const { data, count, error } = await query.order(col, { ascending }).order('id').range((page - 1) * size, page * size - 1);
   if (error) throw fromDbError(error);
 
+  const [toProcessRes, trackingRes] = await Promise.all([
+    supabase.from('orders').select('id', { count: 'exact', head: true }).in('delivery_status', TO_PROCESS_DELIVERY),
+    supabase.from('orders').select('id', { count: 'exact', head: true }).not('delivery_status', 'in', `(${TO_PROCESS_DELIVERY.join(',')})`),
+  ]);
+  const view = sp.view === 'tracking' ? 'tracking' : 'process';
+  const tabs = [
+    { key: 'process', href: '/orders', label: t('orders.tabToProcess'), count: toProcessRes.count ?? 0 },
+    { key: 'tracking', href: '/orders?view=tracking&sort=updated_at&dir=desc', label: t('orders.tabTracking'), count: trackingRes.count ?? 0 },
+  ];
+
   const canAssign = session.can('orders.assign');
   const [agentsRes, productsRes, wilayasRes, providersRes] = await Promise.all([
     session.can('orders.view_all') ? supabase.from('staff_directory').select('id, full_name, role, is_active').order('full_name') : Promise.resolve({ data: [] }),
@@ -49,6 +60,14 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           <Link href="/orders/new" className={buttonVariants()}><Plus />{t('orders.new')}</Link>
         ) : null}
       />
+      <nav className="mb-3 flex gap-1 border-b" aria-label={t('orders.title')}>
+        {tabs.map((tab) => (
+          <Link key={tab.key} href={tab.href} className={cn('-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium',
+            view === tab.key ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+            {tab.label}<span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular">{tab.count}</span>
+          </Link>
+        ))}
+      </nav>
       <OrdersFilters
         agents={staff.filter((a) => a.role === 'agent')}
         products={productsRes.data ?? []}

@@ -89,7 +89,7 @@ export function OrdersFilters({
           </>
         ) : null}
         {params.toString() ? (
-          <Button variant="ghost" size="sm" className="h-9" onClick={() => router.push(pathname)}><FilterX />{t('common.reset')}</Button>
+          <Button variant="ghost" size="sm" className="h-9" onClick={() => router.push(params.get('view') ? `${pathname}?view=${encodeURIComponent(params.get('view')!)}` : pathname)}><FilterX />{t('common.reset')}</Button>
         ) : null}
       </div>
     </div>

@@ -29,6 +29,16 @@ async function handle(req: Request) {
   const started = Date.now();
   const results = await runScheduledJobs(jobs);
   console.log(`[cron] ${results.map((r) => `${r.job}:${r.ok ? (r.skipped ?? 'ok') : 'FAILED'}`).join(' ')} (${Date.now() - started}ms)`);
+  // Per-item outcome of the import/sync jobs (failures are otherwise hidden behind "ok").
+  for (const r of results) {
+    if (!r.ok && r.error) console.error(`[cron] ${r.job} failed: ${r.error}`);
+    if (!['sheets', 'delivery_poll', 'ecotrack_reference'].includes(r.job) || !r.result || typeof r.result !== 'object') continue;
+    for (const [id, out] of Object.entries(r.result as Record<string, unknown>)) {
+      const line = `[cron] ${r.job} ${id.slice(0, 8)}: ${JSON.stringify(out).slice(0, 400)}`;
+      if (out && typeof out === 'object' && 'error' in out) console.error(line);
+      else console.log(line);
+    }
+  }
   return NextResponse.json({ ok: results.every((r) => r.ok), results });
 }
 

@@ -6,9 +6,13 @@ export type OrderSearchParams = {
   q?: string; status?: string; delivery?: string; agent?: string; wilaya?: string; product?: string;
   range?: string; from?: string; to?: string; review?: string; queue?: string; unmatched?: string;
   page?: string; size?: string; sort?: string; dir?: string;
+  /** 'tracking': orders handed to a delivery company; default: orders still to process. */
+  view?: string;
 };
 
 export const SORTABLE = ['ordered_at', 'reference', 'total_amount', 'confirmation_status', 'delivery_status', 'updated_at'] as const;
+/** Orders still handled by the confirmation team (not yet with a delivery company). */
+export const TO_PROCESS_DELIVERY = ['not_submitted', 'submission_failed', 'pending_submission'];
 const NO_ANSWER = ['no_answer_1', 'no_answer_2', 'no_answer_3', 'no_answer_4', 'no_answer_5', 'no_answer_6', 'no_answer_7', 'no_answer_8', 'no_answer_9'];
 
 /** Applies list filters to a PostgREST query builder (RLS still applies). */
@@ -34,6 +38,9 @@ export function applyOrderFilters<Q extends { [k: string]: any }>(query: Q, sp: 
     else if (sp.status === 'no_answer') q = q.in('confirmation_status', NO_ANSWER);
     else if (isConfirmationStatus(sp.status)) q = q.eq('confirmation_status', sp.status);
   }
+  // Split between "to process" and "tracking" (sent orders leave the main list).
+  if (sp.view === 'tracking') q = q.not('delivery_status', 'in', `(${TO_PROCESS_DELIVERY.join(',')})`);
+  else if (sp.view !== 'all' && !sp.delivery) q = q.in('delivery_status', TO_PROCESS_DELIVERY);
   if (sp.delivery) {
     if (sp.delivery === 'in_transit') q = q.in('delivery_status', IN_TRANSIT_STATUSES as string[]);
     else if (sp.delivery === 'not_submitted') q = q.in('delivery_status', ['not_submitted', 'submission_failed']);

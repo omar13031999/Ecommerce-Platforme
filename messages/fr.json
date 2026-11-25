@@ -304,7 +304,9 @@
     "productFreeText": "Nom du produit (si absent du catalogue)",
     "addProduct": "Ajouter un produit",
     "unsavedChanges": "Modifications non enregistrées",
-    "completeBeforeConfirm": "Complétez avant de confirmer : {fields}"
+    "completeBeforeConfirm": "Complétez avant de confirmer : {fields}",
+    "tabToProcess": "À traiter",
+    "tabTracking": "Suivi des colis"
   },
   "deliveryPage": {
     "title": "Livraison",
