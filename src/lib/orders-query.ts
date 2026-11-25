@@ -52,7 +52,7 @@ export function applyOrderFilters<Q extends { [k: string]: any }>(query: Q, sp: 
 export function orderSelect(sp: OrderSearchParams) {
   const base =
     'id, reference, external_id, source, customer_name, phone, wilaya_code, commune, total_amount, confirmation_status, delivery_status, ' +
-    'assigned_to, ordered_at, updated_at, tracking_number, needs_review, has_unmatched_items, possible_duplicate_of, contact_attempts, ' +
+    'assigned_to, ordered_at, updated_at, version, tracking_number, needs_review, has_unmatched_items, possible_duplicate_of, contact_attempts, ' +
     'order_items(product_name, quantity)';
   return sp.product ? `${base}, filter_items:order_items!inner(product_id)` : base;
 }

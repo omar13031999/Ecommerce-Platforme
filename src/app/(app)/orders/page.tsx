@@ -66,6 +66,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           canSubmit={session.can('delivery.manage')}
           showAgent={session.can('orders.view_all')}
           sort={{ col, dir: ascending ? 'asc' : 'desc' }}
+          currentUserId={session.userId}
+          isManager={session.can('orders.manage')}
         />
       </Card>
       <Pagination page={page} pageSize={size} total={count ?? 0} searchParams={sp as Record<string, string | undefined>} />

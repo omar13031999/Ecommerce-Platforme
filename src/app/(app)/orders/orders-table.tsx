@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowDown, ArrowUp, Columns3, Copy, PackageX, Send, UserMinus, UserPlus, Wand2 } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Columns3, Copy, PackageX, PhoneMissed, Send, UserMinus, UserPlus, Wand2 } from 'lucide-react';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { Checkbox, Select } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,15 +13,15 @@ import {
 import { ConfirmationBadge, DeliveryBadge } from '@/components/app/status-badge';
 import { useAction } from '@/components/app/use-action';
 import { formatDZD, formatDateTime, type AppLocale } from '@/lib/format';
-import type { ConfirmationStatus, DeliveryStatus } from '@/lib/domain/statuses';
-import { assignOrders, autoAssignOrders, submitToDelivery, unassignOrders } from '@/lib/actions/orders';
+import { CONFIRMATION_STATUSES, nextNoAnswer, type ConfirmationStatus, type DeliveryStatus } from '@/lib/domain/statuses';
+import { assignOrders, autoAssignOrders, changeConfirmationStatus, submitToDelivery, unassignOrders } from '@/lib/actions/orders';
 
 export type OrderRow = {
   id: string; reference: number; external_id: string | null; source: string; customer_name: string; phone: string;
   wilaya_code: number | null; commune: string | null; total_amount: number; confirmation_status: ConfirmationStatus;
   delivery_status: DeliveryStatus; assigned_to: string | null; ordered_at: string; tracking_number: string | null;
   needs_review: boolean; has_unmatched_items: boolean; possible_duplicate_of: string | null; contact_attempts: number;
-  order_items: { product_name: string; quantity: number }[];
+  version: number; order_items: { product_name: string; quantity: number }[];
 };
 
 const COLUMNS = ['reference', 'date', 'customer', 'phone', 'wilaya', 'products', 'total', 'confirmation', 'delivery', 'agent', 'tracking'] as const;
@@ -29,11 +29,11 @@ type Col = (typeof COLUMNS)[number];
 const STORAGE_KEY = 'orders.columns.v1';
 
 export function OrdersTable({
-  rows, agentNames, agents, providers, canAssign, canSubmit, showAgent, sort,
+  rows, agentNames, agents, providers, canAssign, canSubmit, showAgent, sort, currentUserId, isManager,
 }: {
   rows: OrderRow[]; agentNames: Record<string, string>; agents: { id: string; full_name: string }[];
   providers: { id: string; name: string; code: string }[]; canAssign: boolean; canSubmit: boolean; showAgent: boolean;
-  sort: { col: string; dir: 'asc' | 'desc' };
+  sort: { col: string; dir: 'asc' | 'desc' }; currentUserId: string; isManager: boolean;
 }) {
   const t = useTranslations();
   const locale = useLocale() as AppLocale;
@@ -113,7 +113,10 @@ export function OrdersTable({
       case 'wilaya': return <span className="whitespace-nowrap">{r.wilaya_code ? String(r.wilaya_code).padStart(2, '0') : '—'} {r.commune ?? ''}</span>;
       case 'products': return <span className="line-clamp-2 max-w-[220px] text-xs">{r.order_items.map((i) => `${i.product_name} ×${i.quantity}`).join(', ')}</span>;
       case 'total': return <span className="tabular whitespace-nowrap">{formatDZD(r.total_amount, locale)}</span>;
-      case 'confirmation': return <ConfirmationBadge status={r.confirmation_status} />;
+      case 'confirmation':
+        return (isManager || r.assigned_to === currentUserId) && ['not_submitted', 'submission_failed'].includes(r.delivery_status)
+          ? <QuickStatus row={r} isManager={isManager} />
+          : <ConfirmationBadge status={r.confirmation_status} />;
       case 'delivery': return <DeliveryBadge status={r.delivery_status} />;
       case 'agent': return r.assigned_to ? <span className="whitespace-nowrap text-xs">{agentNames[r.assigned_to] ?? '—'}</span> : <span className="text-xs text-warning">{t('orders.unassigned')}</span>;
       case 'tracking': return <span dir="ltr" className="font-mono text-xs">{r.tracking_number ?? '—'}</span>;
@@ -201,6 +204,34 @@ export function OrdersTable({
           ))}
         </TBody>
       </Table>
+    </div>
+  );
+}
+
+const AGENT_CHOICES: ConfirmationStatus[] = ['confirmed', 'unreachable', 'duplicate', 'cancelled'];
+
+/** Inline confirmation status change (no need to open the order). */
+function QuickStatus({ row, isManager }: { row: OrderRow; isManager: boolean }) {
+  const t = useTranslations();
+  const { run, pending } = useAction();
+  const next = nextNoAnswer(row.confirmation_status);
+  const choices = isManager
+    ? CONFIRMATION_STATUSES
+    : [...new Set<ConfirmationStatus>([row.confirmation_status, ...(next ? [next] : []), ...AGENT_CHOICES])];
+  const apply = (status: ConfirmationStatus) => {
+    if (status === row.confirmation_status) return;
+    run(() => changeConfirmationStatus({ orderId: row.id, status, version: row.version }), { success: `#${row.reference} → ${t(`confirmation.${status}`)}` });
+  };
+  return (
+    <div className="flex items-center gap-1">
+      <Select className="h-8 w-40 text-xs" value={row.confirmation_status} disabled={pending} aria-label={t('orders.changeStatus')}
+        onChange={(e) => apply(e.target.value as ConfirmationStatus)}>
+        {choices.map((s) => <option key={s} value={s}>{t(`confirmation.${s}`)}</option>)}
+      </Select>
+      {next ? (
+        <Button size="icon" variant="warning" className="size-8 shrink-0" disabled={pending} title={`${t('orders.noAnswerNext')} (${next.slice(-1)})`} aria-label={t('orders.noAnswerNext')}
+          onClick={() => apply(next)}><PhoneMissed /></Button>
+      ) : null}
     </div>
   );
 }

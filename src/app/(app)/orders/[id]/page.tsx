@@ -49,6 +49,10 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     supabase.from('wilayas').select('code, name_fr, name_ar').order('code'),
     supabase.from('communes').select('wilaya_code, name, has_stop_desk').eq('is_active', true).order('name').range(0, 4999),
   ]);
+  const { data: lastShipment } = order.delivery_status === 'submission_failed' || order.delivery_status === 'pending_submission'
+    ? await supabase.from('delivery_shipments').select('status, error_code, error_message, attempt_count, updated_at').eq('order_id', id)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+    : { data: null };
   const names: Record<string, string> = Object.fromEntries((staff.data ?? []).map((s) => [s.id, s.full_name]));
   const { data: provider } = order.delivery_provider_id
     ? await supabase.from('delivery_provider_directory').select('name, tracking_url_template').eq('id', order.delivery_provider_id).maybeSingle()
@@ -99,6 +103,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
       {!['not_submitted', 'submission_failed'].includes(order.delivery_status) ? (
         <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">{t('orders.lockedDelivery')}</p>
+      ) : null}
+
+      {lastShipment && ['failed', 'unknown'].includes(lastShipment.status) ? (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+          <p className="font-medium text-destructive">{lastShipment.status === 'unknown' ? t('orders.submissionUnknown') : t('orders.submissionFailed')}</p>
+          <p dir="ltr" className="mt-1 break-words font-mono text-xs">{lastShipment.error_message ?? lastShipment.error_code ?? '—'}</p>
+          {/not_configured/.test(lastShipment.error_message ?? '') ? <p className="mt-1 text-xs text-muted-foreground">{t('orders.providerNotConfiguredHint')}</p> : null}
+          {/commune|wilaya/i.test(lastShipment.error_message ?? '') ? <p className="mt-1 text-xs text-muted-foreground">{t('orders.communeHint')}</p> : null}
+        </div>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">
