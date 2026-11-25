@@ -14,10 +14,14 @@ export async function signIn(_prev: unknown, formData: FormData) {
   if (!parsed.success) return { error: 'invalidCredentials' as const };
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
-  if (error || !data.user) return { error: 'invalidCredentials' as const };
+  if (error || !data.user) {
+    console.warn(`[auth] sign-in rejected by Supabase Auth: ${error?.code ?? 'no_user'} (${error?.status ?? '-'})`);
+    return { error: (error?.code === 'email_not_confirmed' ? 'inactive' : 'invalidCredentials') as 'inactive' | 'invalidCredentials' };
+  }
 
-  const { data: profile } = await supabase.from('profiles').select('is_active, locale').eq('id', data.user.id).single();
+  const { data: profile, error: profileError } = await supabase.from('profiles').select('is_active, locale').eq('id', data.user.id).maybeSingle();
   if (!profile?.is_active) {
+    console.warn(`[auth] user ${data.user.id} blocked: ${profileError ? `profile query failed (${profileError.code})` : profile ? 'profile inactive' : 'no profile row'}`);
     await supabase.auth.signOut();
     return { error: 'inactive' as const };
   }

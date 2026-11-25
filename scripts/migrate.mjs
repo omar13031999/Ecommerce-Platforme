@@ -90,6 +90,13 @@ try {
       );
       await client.query(`update public.profiles set role = 'admin', is_active = true where lower(email) = $1 and (role <> 'admin' or not is_active)`, [owner]);
       log(r.rowCount ? 'owner promoted to admin' : 'owner already admin');
+      const d = await client.query(
+        `select u.email_confirmed_at is not null as confirmed, u.banned_until, u.raw_app_meta_data ->> 'role' as meta_role,
+                p.role, p.is_active, (u.encrypted_password is not null and u.encrypted_password <> '') as has_password
+           from auth.users u left join public.profiles p on p.id = u.id where lower(u.email) = $1`,
+        [owner],
+      );
+      log('owner state:', JSON.stringify(d.rows[0]));
     }
   }
 } catch (e) {
