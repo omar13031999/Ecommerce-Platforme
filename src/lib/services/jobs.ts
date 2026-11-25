@@ -62,6 +62,12 @@ export async function runScheduledJobs(only?: string[]): Promise<JobResult[]> {
   if (want('delivery_submit')) {
     results.push(await withLease('delivery_submit', 900, () => autoSubmitConfirmed()));
   }
+  if (want('ecotrack_reference')) {
+    results.push(await withLease('ecotrack_reference', 900, async () => {
+      const { syncEcotrackReferences } = await import('./ecotrack-sync');
+      return syncEcotrackReferences();
+    }));
+  }
   if (want('meta')) {
     results.push(await withLease('meta', 1800, async () => {
       const { data: accounts } = await db.from('ad_accounts').select('id, last_synced_at').eq('is_active', true);

@@ -125,6 +125,7 @@ export async function submitOrder(orderId: string, providerId: string, actorId: 
 
   await db.from('delivery_shipments').update({ attempt_count: 1, request_payload: input as unknown as object }).eq('id', sh.id);
   try {
+    if (provider.code === 'ecotrack') await alignWithEcotrack(provider.id, input);
     const res = await adapter.createShipment(ctx, input);
     const { error } = await db.rpc('complete_shipment_submission', {
       p_shipment_id: sh.id, p_tracking: res.trackingNumber, p_provider_shipment_id: res.providerShipmentId ?? null,
@@ -142,6 +143,23 @@ export async function submitOrder(orderId: string, providerId: string, actorId: 
     });
     return { orderId, ok: false, error: pe.kind === 'ambiguous' ? 'submission_ambiguous' : `provider_${pe.kind}`, details: [pe.message] };
   }
+}
+
+/**
+ * ECOTRACK only accepts its own commune spelling for the selected wilaya:
+ * use the exact name from the imported list, or refuse before calling the API
+ * (the reason is stored on the shipment and shown on the order).
+ */
+async function alignWithEcotrack(providerId: string, input: ShipmentInput) {
+  const { resolveEcotrackCommune } = await import('./ecotrack-sync');
+  const hit = input.wilayaCode && input.commune ? await resolveEcotrackCommune(providerId, input.wilayaCode, input.commune) : null;
+  if (!hit) {
+    throw new ProviderError('validation', `commune_unknown: « ${input.commune ?? ''} » n'est pas une commune ECOTRACK de la wilaya ${input.wilayaCode ?? '?'}. Choisissez la commune dans la liste (Modifier).`);
+  }
+  if (input.deliveryType === 'stopdesk' && !hit.hasStopDesk) {
+    throw new ProviderError('validation', `no_stop_desk: pas de stop desk ECOTRACK à « ${hit.name} ». Choisissez une commune avec stop desk ou la livraison à domicile.`);
+  }
+  input.commune = hit.name;
 }
 
 export async function submitOrders(orderIds: string[], providerId: string, actorId: string | null, trigger: 'manual' | 'schedule' = 'manual') {

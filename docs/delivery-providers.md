@@ -17,7 +17,14 @@ Dedicated adapter (`src/lib/integrations/delivery/adapters/ecotrack.ts`), writte
   (`get/products/list`). Selling prices and costs stay to be filled in the platform.
 * `"use_stock": true` sends parcels prepared from the stock held by the company (`stock=1`, `produit` = references,
   `quantite` = quantities); every order line must then be matched to a product with a SKU.
-* Statuses are read in batches of 100 with `get/orders/status?status=all` (rate limits: 50 req/min) and mapped
+* **Verified live** against a real ECOTRACK instance (`npm run test:live`): creation (home, stop desk, stock),
+  status read, lookup by reference, deletion, refusal of unknown communes / SKUs.
+* Before each submission the commune is replaced by ECOTRACK's exact spelling for the wilaya (accent/case
+  insensitive); unknown communes and stop desk requested where none exists are refused with a clear reason.
+* Stock mode is automatic when every order line is matched to a product with a SKU (`"use_stock": false` to disable).
+* Communes and products are refreshed automatically once a day.
+* Old "API REST configurable" providers pointing at an `ecotrack` URL are converted to this adapter (migration 0016).
+* Statuses are read in batches of 100 with `get/orders/status?status=all` (Bearer header; rate limits: 50 req/min) and mapped
   to internal statuses (overridable in *Correspondance des statuts*).
 * **Webhooks**: the payload format is not in the public documentation, so a webhook is only a trigger: tracking
   numbers found in the body are re-read from the API with the account token. Declare the URL shown in the

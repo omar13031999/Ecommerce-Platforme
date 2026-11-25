@@ -10,7 +10,7 @@ import type { DeliveryStatus } from '@/lib/domain/statuses';
  * Implemented from the official "ECOTRACK API" Postman documentation
  * (https://documenter.getpostman.com/view/14517169/Tz5je15g):
  *  - auth: API token as Bearer in the Authorization header
- *    (validate/token and get/orders/status take it as `api_token` query param)
+ *    (validate/token only accepts it as the `api_token` query parameter — verified live)
  *  - POST /api/v1/create/order            (query parameters) -> { success, tracking }
  *  - POST /api/v1/valid/order?tracking=   (ship / validate, optional)
  *  - GET  /api/v1/get/orders?page&start_date&end_date (40/page, reference lookup)
@@ -26,10 +26,14 @@ import type { DeliveryStatus } from '@/lib/domain/statuses';
  * Optional provider config (JSON):
  *   { "auto_validate": false, "ask_collection": true, "operation_type": 1, "use_stock": false }
  * use_stock: the parcel is prepared from the stock held by the company
- * (stock=1, produit = product references, quantite = quantities).
+ * (stock=1, produit = product references, quantite = quantities). Default:
+ * automatic when every order line is matched to a product with a SKU.
  */
 
 type EcotrackConfig = { auto_validate?: boolean; ask_collection?: boolean; operation_type?: number; use_stock?: boolean };
+
+/** Stock mode: explicit config, otherwise automatic when every line has a product reference (SKU). */
+const stockMode = (c: EcotrackConfig, input: ShipmentInput) => c.use_stock ?? (input.products.length > 0 && input.products.every((p) => Boolean(p.sku?.trim())));
 
 const MAX_TRACKINGS_PER_CALL = 100;
 
@@ -90,7 +94,8 @@ async function fetchStatuses(ctx: AdapterContext, trackings: string[]): Promise<
       url: url(ctx, '/api/v1/get/orders/status'),
       method: 'GET',
       headers: auth(ctx),
-      query: { api_token: token(ctx), trackings: batch.join(','), status: 'all' },
+      // Bearer header only (verified live); keeps the token out of URLs and logs.
+      query: { trackings: batch.join(','), status: 'all' },
       timeoutMs: 30000,
     });
     Object.assign(out, data?.data ?? {});
@@ -143,6 +148,7 @@ function collectTrackings(value: unknown, out: Set<string>, depth = 0) {
 // codes documented for get/tracking/info. Overridable per provider in the UI.
 const STATUS_MAP: Record<string, DeliveryStatus> = {
   prete_a_expedier: 'submitted',
+  prete_a_preparer: 'submitted', // seen live, not in the documented list
   en_ramassage: 'ready_for_pickup',
   en_preparation_stock: 'processing',
   vers_hub: 'in_transit',
@@ -214,7 +220,7 @@ export const ecotrackAdapter: DeliveryAdapter = {
       type: c.operation_type ?? 1,
       stop_desk: input.deliveryType === 'stopdesk' ? 1 : 0,
     };
-    if (c.use_stock) {
+    if (stockMode(c, input)) {
       const missing = input.products.filter((p) => !p.sku?.trim());
       if (missing.length) throw new ProviderError('validation', `missing_sku: ${missing.map((p) => p.name).join(', ')}`.slice(0, 300));
       query.stock = 1;

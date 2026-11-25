@@ -70,7 +70,7 @@ describe('ECOTRACK adapter (official Postman documentation)', () => {
     const events = await ecotrackAdapter.fetchTracking!(ctx(), ['ECL1', 'ECL2']);
     const { url } = call(f);
     expect(url.pathname).toBe('/api/v1/get/orders/status');
-    expect(Object.fromEntries(url.searchParams)).toEqual({ api_token: 'TOKEN123', trackings: 'ECL1,ECL2', status: 'all' });
+    expect(Object.fromEntries(url.searchParams)).toEqual({ trackings: 'ECL1,ECL2', status: 'all' });
     expect(events[0]).toMatchObject({ trackingNumber: 'ECL1', providerStatus: 'en_livraison', occurredAt: '2025-07-16T02:31:15+01:00', reason: 'Remarque — Colis a livrer le 23' });
     expect(ecotrackAdapter.statusMap.en_livraison).toBe('out_for_delivery');
     expect(ecotrackAdapter.statusMap.encaisse_non_paye).toBe('delivered');
@@ -119,5 +119,23 @@ describe('ECOTRACK adapter (official Postman documentation)', () => {
     const products = await listEcotrackProducts(ctx());
     expect(products.map((p) => [p.reference, p.title])).toEqual([['TG41', 'Tn Gold 41'], ['RCS', 'موسع حزام الامان']]);
     expect(call(f).url.pathname).toBe('/api/v1/get/products/list');
+  });
+});
+
+describe('ECOTRACK alignment helpers', () => {
+  it('matches commune names regardless of accents, case and punctuation', async () => {
+    const { communeKey } = await import('@/lib/services/ecotrack-sync');
+    expect(communeKey('Bab-Ezzouar')).toBe(communeKey('BAB EZZOUAR'));
+    expect(communeKey('Béchar')).toBe(communeKey('bechar'));
+    expect(communeKey('التوصيل للمكتب')).not.toBe(communeKey('Bechar'));
+  });
+
+  it('uses stock mode automatically when every line has a SKU', async () => {
+    const f = vi.fn(async () => json({ success: true, tracking: 'T3' }));
+    vi.stubGlobal('fetch', f);
+    await ecotrackAdapter.createShipment!(ctx(), { ...input, products: [{ name: 'Tn Gold 41', quantity: 1, unitPrice: 1, sku: 'TG41' }] });
+    expect(call(f).url.searchParams.get('stock')).toBe('1');
+    await ecotrackAdapter.createShipment!(ctx({ use_stock: false }), { ...input, products: [{ name: 'Tn Gold 41', quantity: 1, unitPrice: 1, sku: 'TG41' }] });
+    expect(call(f, 1).url.searchParams.get('stock')).toBeNull();
   });
 });

@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 export type SyncKind =
   | 'google_sheets' | 'delivery_poll' | 'delivery_submit' | 'meta_ads'
-  | 'recurring_expenses' | 'assignment' | 'redistribution' | 'settlement_import';
+  | 'recurring_expenses' | 'assignment' | 'redistribution' | 'settlement_import' | 'ecotrack_reference';
 
 export async function startRun(kind: SyncKind, targetId: string | null, trigger: 'schedule' | 'manual' | 'webhook' | 'retry', userId?: string | null) {
   const { data, error } = await createAdminClient()
