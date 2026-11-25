@@ -375,7 +375,20 @@
     "stockAvailable": "المخزون المتاح (المتبقي)",
     "stockPhysicalShort": "فعلي",
     "stockReservedShort": "محجوز",
-    "stockAvailableShort": "متاح"
+    "stockAvailableShort": "متاح",
+    "importPrices": "استيراد الأسعار",
+    "importPricesHelp": "الصق قائمة «الرمز ⇥ الاسم ⇥ السعر» (سطر لكل منتج، منسوخة من Excel أو Google Sheets). الرمز بدون مقاس (مثل TMD) يُطبَّق على كل المقاسات (TMD39…TMD43).",
+    "applyAs": "تطبيق كـ",
+    "previewImport": "معاينة",
+    "matchedTo": "المنتجات المعنية",
+    "notFound": "غير موجود",
+    "rule_sku": "المرجع",
+    "rule_sku_loose": "مرجع مقارب",
+    "rule_family": "كل المقاسات",
+    "rule_sku_in_name": "المرجع في الاسم",
+    "rule_name": "نفس الاسم",
+    "createMissing": "إنشاء {count} منتجات غير موجودة",
+    "importPricesDone": "تم تحديث {updated} منتج، إنشاء {created}، تجاهل {skipped} سطر"
   },
   "analytics": {
     "title": "تحليل المنتجات",

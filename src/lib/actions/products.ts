@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { requireUser } from '@/lib/auth/session';
-import { fromDbError, runAction } from '@/lib/errors';
+import { AppError, fromDbError, runAction } from '@/lib/errors';
 
 const money = z.union([z.coerce.number().min(0).max(100_000_000), z.literal('').transform(() => null), z.null()]).optional();
 const productSchema = z.object({
@@ -78,5 +78,64 @@ export async function matchLabel(input: { itemId: string; productId: string }) {
     const supabase = await createClient();
     const { error } = await supabase.rpc('match_order_item', { p_item_id: p.itemId, p_product_id: p.productId, p_remember: true });
     if (error) throw fromDbError(error);
+  });
+}
+
+const priceImportSchema = z.object({
+  text: z.string().min(1).max(200_000),
+  field: z.enum(['purchase_cost', 'selling_price']),
+  createMissing: z.boolean().default(false),
+});
+
+async function priceCatalog() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('products').select('id, sku, name').order('name');
+  if (error) throw fromDbError(error);
+  return { supabase, catalog: data ?? [] };
+}
+
+/** Dry run: how each line of a pasted price list matches the catalogue. */
+export async function previewPriceImport(input: { text: string }) {
+  return runAction(async () => {
+    await requireUser('products.manage', 'finance.manage');
+    const { matchPriceList } = await import('@/lib/domain/price-import');
+    const { catalog } = await priceCatalog();
+    return matchPriceList(z.string().min(1).max(200_000).parse(input.text), catalog)
+      .map((m) => ({ line: m.line, code: m.code, name: m.name, price: m.price, rule: m.rule, products: m.products.map((p) => ({ sku: p.sku, name: p.name })) }));
+  });
+}
+
+/** Applies a pasted price list (purchase cost needs finance.manage, selling price needs products.manage). */
+export async function applyPriceImport(input: z.input<typeof priceImportSchema>) {
+  return runAction(async () => {
+    const p = priceImportSchema.parse(input);
+    const session = await requireUser(p.field === 'purchase_cost' ? 'finance.manage' : 'products.manage');
+    if (p.createMissing && !session.can('products.manage')) throw new AppError('forbidden', 403);
+    const { matchPriceList } = await import('@/lib/domain/price-import');
+    const { supabase, catalog } = await priceCatalog();
+    const matches = matchPriceList(p.text, catalog);
+    let updated = 0;
+    let created = 0;
+    let skipped = 0;
+    for (const m of matches) {
+      if (m.price === null) { skipped++; continue; }
+      let ids = m.products.map((x) => x.id);
+      if (!ids.length) {
+        if (!p.createMissing || !m.code) { skipped++; continue; }
+        const { data, error } = await supabase.from('products')
+          .insert({ sku: m.code, name: m.name || m.code, selling_price: p.field === 'selling_price' ? m.price : 0, created_by: session.userId })
+          .select('id').single();
+        if (error) throw fromDbError(error);
+        ids = [data.id];
+        created++;
+        if (p.field === 'selling_price') continue;
+      }
+      const { error } = p.field === 'purchase_cost'
+        ? await supabase.from('product_costs').update({ purchase_cost: m.price }).in('product_id', ids)
+        : await supabase.from('products').update({ selling_price: m.price }).in('id', ids);
+      if (error) throw fromDbError(error);
+      updated += ids.length;
+    }
+    return { lines: matches.length, updated, created, skipped };
   });
 }

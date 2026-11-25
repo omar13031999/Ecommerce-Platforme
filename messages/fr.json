@@ -375,7 +375,20 @@
     "stockAvailable": "Stock disponible (restant)",
     "stockPhysicalShort": "Physique",
     "stockReservedShort": "Réservé",
-    "stockAvailableShort": "Disponible"
+    "stockAvailableShort": "Disponible",
+    "importPrices": "Importer des prix",
+    "importPricesHelp": "Collez une liste « CODE ⇥ Nom ⇥ Prix » (une ligne par produit, copiée d'Excel ou Google Sheets). Un code sans taille (ex. TMD) s'applique à toutes les tailles (TMD39…TMD43).",
+    "applyAs": "Appliquer comme",
+    "previewImport": "Prévisualiser",
+    "matchedTo": "Produits concernés",
+    "notFound": "introuvable",
+    "rule_sku": "référence",
+    "rule_sku_loose": "référence approchée",
+    "rule_family": "toutes les tailles",
+    "rule_sku_in_name": "référence dans le nom",
+    "rule_name": "même nom",
+    "createMissing": "Créer les {count} produits introuvables",
+    "importPricesDone": "{updated} produit(s) mis à jour, {created} créé(s), {skipped} ligne(s) ignorée(s)"
   },
   "analytics": {
     "title": "Analyse produits",

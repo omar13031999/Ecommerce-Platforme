@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { formatDZD, formatDateTime, formatPercent, type AppLocale } from '@/lib/format';
-import { ProductDialog, ArchiveButton, RecalculateDialog, SyncStockButton } from './products-client';
+import { ProductDialog, ArchiveButton, PriceImportDialog, RecalculateDialog, SyncStockButton } from './products-client';
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ archived?: string }> }) {
   const session = await requirePage('products.manage', 'finance.view');
@@ -37,6 +37,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           <>
             <a href={archived === '1' ? '/products' : '/products?archived=1'} className="text-sm text-primary hover:underline">{archived === '1' ? t('common.back') : t('products.showArchived')}</a>
             {hasStock && session.can('products.manage') ? (stockProviders.data ?? []).map((pr) => <SyncStockButton key={pr.id} providerId={pr.id} label={pr.name} />) : null}
+            {session.can('products.manage') || session.can('finance.manage') ? <PriceImportDialog canCost={session.can('finance.manage')} canProducts={session.can('products.manage')} /> : null}
             {session.can('products.manage') ? <ProductDialog canCost={session.can('finance.manage')} /> : null}
           </>
         }
