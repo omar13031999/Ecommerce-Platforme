@@ -1,13 +1,14 @@
 'use client';
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Archive, ArchiveRestore, History, Pencil, Plus } from 'lucide-react';
+import { Archive, ArchiveRestore, History, Pencil, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAction } from '@/components/app/use-action';
 import { recalculateCosts, saveProduct, setProductArchived } from '@/lib/actions/products';
+import { importProviderProducts } from '@/lib/actions/delivery';
 import { todayInAlgiers } from '@/lib/dates';
 
 type P = { id?: string; name: string; sku: string; description: string; selling_price: number; purchase_cost: number | null; packaging_cost: number | null; storage_cost: number | null };
@@ -83,5 +84,15 @@ export function RecalculateDialog({ productId }: { productId: string }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function SyncStockButton({ providerId, label }: { providerId: string; label: string }) {
+  const t = useTranslations();
+  const { run, pending } = useAction();
+  return (
+    <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => importProviderProducts(providerId), {
+      success: (d) => t('integrations.productsImported', { total: d?.total ?? 0, created: d?.created ?? 0, updated: d?.updated ?? 0 }),
+    })}><RefreshCw className={pending ? 'animate-spin' : ''} />{t('products.syncStock', { provider: label })}</Button>
   );
 }

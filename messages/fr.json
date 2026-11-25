@@ -367,7 +367,15 @@
     "remember": "Mémoriser la règle",
     "aliases": "Règles de correspondance",
     "noUnmatched": "Tous les produits importés sont reconnus.",
-    "margin": "Marge"
+    "margin": "Marge",
+    "syncStock": "Synchroniser le stock {provider}",
+    "stockSyncedAt": "Stock chez le transporteur — dernière synchronisation : {date} (automatique toutes les 30 min)",
+    "stockPhysical": "Stock physique chez le transporteur",
+    "stockReserved": "Stock en préparation (réservé)",
+    "stockAvailable": "Stock disponible (restant)",
+    "stockPhysicalShort": "Physique",
+    "stockReservedShort": "Réservé",
+    "stockAvailableShort": "Disponible"
   },
   "analytics": {
     "title": "Analyse produits",

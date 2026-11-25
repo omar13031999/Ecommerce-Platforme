@@ -292,7 +292,7 @@ export const ecotrackAdapter: DeliveryAdapter = {
 };
 
 export type EcotrackCommune = { name: string; wilayaCode: number; postalCode: string | null; hasStopDesk: boolean; isActive: boolean };
-export type EcotrackProduct = { reference: string; title: string; isActive: boolean; stock: number | null };
+export type EcotrackProduct = { reference: string; title: string; isActive: boolean; physical: number | null; reserved: number | null; available: number | null };
 
 /** GET /api/v1/get/communes — deliverable communes, spelled as ECOTRACK expects them. */
 export async function listEcotrackCommunes(ctx: AdapterContext): Promise<EcotrackCommune[]> {
@@ -313,13 +313,17 @@ export async function listEcotrackCommunes(ctx: AdapterContext): Promise<Ecotrac
 export async function listEcotrackProducts(ctx: AdapterContext): Promise<EcotrackProduct[]> {
   const out = new Map<string, EcotrackProduct>();
   for (let page = 1; page <= 100; page++) {
-    const { data } = await httpJson<{ products?: { reference?: string | number; title?: string; is_active?: number; stock_disponible?: number }[]; pagination?: { current_page?: number; last_page?: number } }>({
+    const { data } = await httpJson<{ products?: { reference?: string | number; title?: string; is_active?: number; stock_disponible?: number; stock_reserve?: number; stock_phisique?: number }[]; pagination?: { current_page?: number; last_page?: number } }>({
       url: url(ctx, '/api/v1/get/products/list'), method: 'GET', headers: auth(ctx), query: page > 1 ? { page } : {},
     });
     for (const p of data?.products ?? []) {
       const reference = String(p.reference ?? '').trim();
       if (!reference || !p.title?.trim()) continue;
-      out.set(reference.toLowerCase(), { reference, title: p.title.trim(), isActive: p.is_active === undefined ? true : Boolean(Number(p.is_active)), stock: typeof p.stock_disponible === 'number' ? p.stock_disponible : null });
+      const n = (v: unknown) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Math.trunc(Number(v)));
+      out.set(reference.toLowerCase(), {
+        reference, title: p.title.trim(), isActive: p.is_active === undefined ? true : Boolean(Number(p.is_active)),
+        physical: n(p.stock_phisique), reserved: n(p.stock_reserve), available: n(p.stock_disponible),
+      });
     }
     const pg = data?.pagination;
     // Stop on the last page, or if the API ignores the page parameter.

@@ -22,7 +22,8 @@ Dedicated adapter (`src/lib/integrations/delivery/adapters/ecotrack.ts`), writte
 * Before each submission the commune is replaced by ECOTRACK's exact spelling for the wilaya (accent/case
   insensitive); unknown communes and stop desk requested where none exists are refused with a clear reason.
 * Stock mode is automatic when every order line is matched to a product with a SKU (`"use_stock": false` to disable).
-* Communes and products are refreshed automatically once a day.
+* **Stock mirror**: physical / reserved / available stock per product (`get/products/list`, all pages) is stored in
+  `product_provider_stock` and shown on the Products page; refreshed every 30 minutes (communes once a day).
 * Old "API REST configurable" providers pointing at an `ecotrack` URL are converted to this adapter (migration 0016).
 * Statuses are read in batches of 100 with `get/orders/status?status=all` (Bearer header; rate limits: 50 req/min) and mapped
   to internal statuses (overridable in *Correspondance des statuts*).

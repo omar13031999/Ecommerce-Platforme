@@ -117,7 +117,7 @@ describe('ECOTRACK adapter (official Postman documentation)', () => {
     const f = vi.fn(async (u: URL) => json(pages[(Number(new URL(String(u)).searchParams.get('page')) || 1) - 1]));
     vi.stubGlobal('fetch', f);
     const products = await listEcotrackProducts(ctx());
-    expect(products.map((p) => [p.reference, p.title])).toEqual([['TG41', 'Tn Gold 41'], ['RCS', 'موسع حزام الامان']]);
+    expect(products.map((p) => [p.reference, p.title, p.available])).toEqual([['TG41', 'Tn Gold 41', 7], ['RCS', 'موسع حزام الامان', 5]]);
     expect(call(f).url.pathname).toBe('/api/v1/get/products/list');
   });
 });

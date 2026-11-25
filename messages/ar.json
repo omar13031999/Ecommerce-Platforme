@@ -367,7 +367,15 @@
     "remember": "حفظ القاعدة",
     "aliases": "قواعد المطابقة",
     "noUnmatched": "جميع المنتجات المستوردة معروفة.",
-    "margin": "الهامش"
+    "margin": "الهامش",
+    "syncStock": "مزامنة مخزون {provider}",
+    "stockSyncedAt": "المخزون عند شركة التوصيل — آخر مزامنة: {date} (تلقائياً كل 30 دقيقة)",
+    "stockPhysical": "المخزون الفعلي عند شركة التوصيل",
+    "stockReserved": "المخزون قيد التحضير (محجوز)",
+    "stockAvailable": "المخزون المتاح (المتبقي)",
+    "stockPhysicalShort": "فعلي",
+    "stockReservedShort": "محجوز",
+    "stockAvailableShort": "متاح"
   },
   "analytics": {
     "title": "تحليل المنتجات",

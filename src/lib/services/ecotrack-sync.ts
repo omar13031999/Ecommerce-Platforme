@@ -56,11 +56,25 @@ export async function syncEcotrackProducts(providerId: string) {
     } else unchanged++;
   }
   for (let i = 0; i < toInsert.length; i += 200) {
-    const { error: insErr } = await db.from('products').insert(toInsert.slice(i, i + 200));
+    const { data: ins, error: insErr } = await db.from('products').insert(toInsert.slice(i, i + 200)).select('id, sku, name');
     if (insErr) throw insErr;
+    for (const p of ins ?? []) bySku.set(String(p.sku).toLowerCase(), p);
     created += Math.min(200, toInsert.length - i);
   }
-  return { total: list.length, created, updated, unchanged };
+
+  // Stock mirror (physical / reserved / available at the delivery company).
+  const now = new Date().toISOString();
+  const stockRows = list.flatMap((p) => {
+    const prod = bySku.get(p.reference.toLowerCase());
+    return prod ? [{ product_id: prod.id, provider_id: providerId, physical: p.physical ?? 0, reserved: p.reserved ?? 0, available: p.available ?? 0, synced_at: now }] : [];
+  });
+  for (let i = 0; i < stockRows.length; i += 500) {
+    const { error: stErr } = await db.from('product_provider_stock').upsert(stockRows.slice(i, i + 500), { onConflict: 'product_id,provider_id' });
+    if (stErr) throw stErr;
+  }
+  await db.from('product_provider_stock').delete().eq('provider_id', providerId).lt('synced_at', now);
+  await db.from('delivery_providers').update({ stock_synced_at: now }).eq('id', providerId);
+  return { total: list.length, created, updated, unchanged, stock: stockRows.length };
 }
 
 /**
@@ -83,18 +97,19 @@ export async function resolveEcotrackCommune(providerId: string, wilayaCode: num
   return hit ? { name: hit.name, hasStopDesk: hit.has_stop_desk } : null;
 }
 
-/** Daily refresh of communes + products for every active ECOTRACK provider. */
+/** Every 30 min: products + stock; once a day: communes — for every active ECOTRACK provider. */
 export async function syncEcotrackReferences() {
   const db = createAdminClient();
   const { data: providers } = await db.from('delivery_providers').select('id').eq('code', 'ecotrack').eq('is_active', true);
   const out: Record<string, unknown> = {};
   for (const p of providers ?? []) {
-    const { data: last } = await db.from('sync_runs').select('started_at').eq('kind', 'ecotrack_reference').eq('target_id', p.id)
-      .eq('status', 'success').order('started_at', { ascending: false }).limit(1).maybeSingle();
-    if (last && Date.now() - Date.parse(last.started_at) < 24 * 3600_000) continue;
+    const { data: prov } = await db.from('delivery_providers').select('stock_synced_at').eq('id', p.id).single();
+    if (prov?.stock_synced_at && Date.now() - Date.parse(prov.stock_synced_at) < 30 * 60_000) continue;
+    const { data: lastCommunes } = await db.from('communes').select('updated_at').eq('source', 'ecotrack').order('updated_at', { ascending: false }).limit(1).maybeSingle();
+    const communesDue = !lastCommunes || Date.now() - Date.parse(lastCommunes.updated_at) >= 24 * 3600_000;
     const runId = await startRun('ecotrack_reference', p.id, 'schedule', null);
     try {
-      const communes = await syncEcotrackCommunes(p.id);
+      const communes = communesDue ? await syncEcotrackCommunes(p.id) : null;
       const products = await syncEcotrackProducts(p.id);
       await finishRun(runId, 'success', { communes, ...products });
       out[p.id] = { communes, ...products };
