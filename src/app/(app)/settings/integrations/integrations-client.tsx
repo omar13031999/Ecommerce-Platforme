@@ -33,11 +33,11 @@ export function MetaImportButton({ connectionId }: { connectionId: string }) {
 
 type Source = {
   id: string; name: string; connection_id: string | null; spreadsheet_id: string; worksheet_title: string; header_row: number;
-  column_mapping: ColumnMapping; options: { multi_product_separator?: string; group_rows_by_external_id?: boolean; price_is_line_total?: boolean; date_format?: 'auto' | 'dmy' | 'mdy' };
+  column_mapping: ColumnMapping; options: { multi_product_separator?: string; group_rows_by_external_id?: boolean; price_is_line_total?: boolean; date_format?: 'auto' | 'dmy' | 'mdy'; ai_extract?: boolean };
   sync_enabled: boolean; sync_interval_minutes: number;
 };
 
-export function SourceActions({ source, connections }: { source: Source; connections: { id: string; label: string }[] }) {
+export function SourceActions({ source, connections, aiAvailable = false }: { source: Source; connections: { id: string; label: string }[]; aiAvailable?: boolean }) {
   const t = useTranslations();
   const { run, pending } = useAction();
   return (
@@ -46,13 +46,13 @@ export function SourceActions({ source, connections }: { source: Source; connect
         onClick={() => run(() => testSheetSource(source.id), { refresh: false, success: (d) => t('integrations.testOk', { rows: d?.rows ?? 0, orders: d?.orders ?? 0 }) })}><FlaskConical /></Button>
       <Button size="icon" variant="ghost" aria-label={t('common.syncNow')} disabled={pending}
         onClick={() => run(() => syncSheetNow(source.id), { success: (d) => t('integrations.syncDone', { created: d?.created ?? 0, updated: d?.updated ?? 0, errors: d?.errors ?? 0 }) })}><RefreshCw className={pending ? 'animate-spin' : ''} /></Button>
-      <SourceEditor connections={connections} source={source} />
+      <SourceEditor connections={connections} source={source} aiAvailable={aiAvailable} />
       <Button size="icon" variant="ghost" aria-label={t('common.delete')} disabled={pending} onClick={() => { if (confirm(t('common.confirm'))) run(() => deleteSheetSource(source.id)); }}><Trash2 /></Button>
     </div>
   );
 }
 
-export function SourceEditor({ connections, source }: { connections: { id: string; label: string }[]; source?: Source }) {
+export function SourceEditor({ connections, source, aiAvailable = false }: { connections: { id: string; label: string }[]; source?: Source; aiAvailable?: boolean }) {
   const t = useTranslations();
   const { run, pending } = useAction();
   const [open, setOpen] = useState(false);
@@ -142,6 +142,11 @@ export function SourceEditor({ connections, source }: { connections: { id: strin
               ) : null}
               <fieldset className="grid gap-2 rounded-md border p-3 sm:grid-cols-2">
                 <legend className="px-1 text-sm font-medium">{t('integrations.options')}</legend>
+                <label className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs sm:col-span-2">
+                  <Checkbox checked={Boolean(opts.ai_extract)} onChange={(e) => setOpts({ ...opts, ai_extract: e.target.checked })} />
+                  <span><span className="font-medium">{t('integrations.aiExtract')}</span><br /><span className="text-muted-foreground">{t('integrations.aiExtractHelp')}</span>
+                    {!aiAvailable ? <><br /><span className="text-warning">{t('integrations.aiNotConfigured')}</span></> : null}</span>
+                </label>
                 <div className="grid gap-1.5"><Label className="text-xs">{t('integrations.multiSeparator')}</Label><Input className="h-8" maxLength={5} value={opts.multi_product_separator ?? ''} onChange={(e) => setOpts({ ...opts, multi_product_separator: e.target.value })} /></div>
                 <div className="grid gap-1.5"><Label className="text-xs">{t('integrations.dateFormat')}</Label>
                   <Select className="h-8" value={opts.date_format ?? 'auto'} onChange={(e) => setOpts({ ...opts, date_format: e.target.value as 'auto' })}><option value="auto">{t('integrations.dateAuto')}</option><option value="dmy">JJ/MM/AAAA</option><option value="mdy">MM/DD/YYYY</option></Select>

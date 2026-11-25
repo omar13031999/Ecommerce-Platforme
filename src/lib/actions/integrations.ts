@@ -62,6 +62,7 @@ const sourceSchema = z.object({
     group_rows_by_external_id: z.boolean().optional(),
     price_is_line_total: z.boolean().optional(),
     date_format: z.enum(['auto', 'dmy', 'mdy']).optional(),
+    ai_extract: z.boolean().optional(),
   }),
   sync_enabled: z.boolean(),
   sync_interval_minutes: z.number().int().min(5).max(1440),
@@ -72,7 +73,7 @@ export async function saveSheetSource(input: z.input<typeof sourceSchema>) {
     const s = await requireUser('integrations.manage');
     const p = sourceSchema.parse(input);
     const mapping = Object.fromEntries(Object.entries(p.column_mapping).filter(([, v]) => v));
-    if (!Object.keys(mapping).length) throw new AppError('missing_columns', 400, { phone: ['required'] });
+    if (!Object.keys(mapping).length && !p.options.ai_extract) throw new AppError('missing_columns', 400, { phone: ['required'] });
     const supabase = await createClient();
     const row = { ...p, column_mapping: mapping };
     delete (row as { id?: string }).id;
@@ -93,6 +94,11 @@ export async function testSheetSource(sourceId: string) {
     if (!src) throw new AppError('invalid_input');
     try {
       const { header, rows, headerRow } = await readSourceRows(src);
+      if (src.options?.ai_extract) {
+        // AI mode: no column requirement; the rows are read by AI during the sync.
+        const filled = rows.filter((row: string[]) => row.some((c) => String(c ?? '').trim()));
+        return { rows: filled.length, orders: filled.length, errors: [] };
+      }
       const r = rowsToOrders(header, rows, src.column_mapping, src.options, headerRow + 1);
       if (!r.orders.length && r.missingColumns.length) throw missingColumnsError(missingColumnsMessage(r.missingColumns, header));
       return { rows: rows.length, orders: r.orders.length, errors: r.errors.slice(0, 20) };

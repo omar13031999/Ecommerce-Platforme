@@ -1,7 +1,8 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSheet } from '@/lib/integrations/google-sheets/google';
-import { resolveColumns, rowsToOrders, type ColumnMapping, type MappingOptions } from '@/lib/integrations/google-sheets/mapping';
+import { parseSheetDate, resolveColumns, rowFingerprint, rowsToOrders, type ColumnMapping, type ExternalOrder, type MappingOptions } from '@/lib/integrations/google-sheets/mapping';
+import { aiRowToOrder } from '@/lib/integrations/google-sheets/ai-order';
 import { withRetry } from '@/lib/integrations/http';
 import { readPublicSheet } from '@/lib/integrations/google-sheets/public-sheet';
 import { googleAccessToken } from './google';
@@ -50,18 +51,91 @@ export function missingColumnsMessage(missing: string[], header: string[]) {
   return `missing_columns:${missing.join(',')}|found:${found || '(vide)'}`.slice(0, 500);
 }
 
+/** Rows read by AI per sync (the rest is picked up by the next sync, every few minutes). */
+const AI_ROWS_PER_SYNC = 60;
+
+/**
+ * AI mode: every row is read whole (headers + values) by the AI extractor, so
+ * columns may be mixed up. Only rows not imported yet are sent (rows already in
+ * the platform are owned by the confirmers). Rows the AI could not read fall
+ * back to the column mapping, or are imported raw for manual completion.
+ */
+async function aiOrders(src: SheetSource, header: string[], rows: string[][], headerRow: number) {
+  const db = createAdminClient();
+  const { extractRowsWithAI } = await import('@/lib/integrations/google-sheets/ai-extract');
+  const names = header.map((h, j) => String(h ?? '').trim() || `Colonne ${j + 1}`);
+  const idCol = src.column_mapping.external_id ? names.findIndex((h) => h.toLowerCase() === src.column_mapping.external_id!.toLowerCase()) : -1;
+  const dateCol = src.column_mapping.created_at ? names.findIndex((h) => h.toLowerCase() === src.column_mapping.created_at!.toLowerCase()) : -1;
+
+  const candidates = rows.flatMap((row, i) => {
+    if (row.every((c) => !String(c ?? '').trim())) return [];
+    const cells = Object.fromEntries(names.map((h, j) => [h, String(row[j] ?? '')]));
+    const externalId = (idCol >= 0 && String(row[idCol] ?? '').trim()) || rowFingerprint(row.map((c) => String(c ?? '')));
+    return [{ rowNumber: headerRow + 1 + i, row, cells, externalId }];
+  });
+
+  const existing = new Set<string>();
+  const ids = [...new Set(candidates.map((c) => c.externalId))];
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await db.from('orders').select('external_id').eq('source', 'google_sheets').eq('source_id', src.id).in('external_id', ids.slice(i, i + 200));
+    for (const o of data ?? []) existing.add(o.external_id as string);
+  }
+  const fresh = candidates.filter((c) => !existing.has(c.externalId)).slice(0, AI_ROWS_PER_SYNC);
+
+  const { data: catalog } = await db.from('products').select('name, sku').eq('is_archived', false).order('name').limit(500);
+  const { results, errors: aiErrors } = fresh.length
+    ? await extractRowsWithAI(fresh.map((c) => ({ row: c.rowNumber, cells: c.cells })), catalog ?? [])
+    : { results: new Map(), errors: [] as string[] };
+
+  const orders: ExternalOrder[] = [];
+  const errors: { row: number; external_id: string | null; error: string }[] = [];
+  for (const c of fresh) {
+    const ai = results.get(c.rowNumber);
+    const orderedAt = dateCol >= 0 ? parseSheetDate(String(c.row[dateCol] ?? ''), src.options.date_format) : null;
+    if (ai) {
+      orders.push(aiRowToOrder(ai, c.externalId, c.rowNumber, c.cells, orderedAt));
+      continue;
+    }
+    // AI unavailable for this row: column mapping, else import raw for the confirmers.
+    const viaMapping = Object.keys(src.column_mapping).length
+      ? rowsToOrders(header, [c.row], src.column_mapping, src.options, c.rowNumber).orders[0]
+      : undefined;
+    orders.push(viaMapping ? { ...viaMapping, external_id: c.externalId } : {
+      external_id: c.externalId, customer_name: '', phone: '', items: [], row_numbers: [c.rowNumber], ordered_at: orderedAt,
+      needs_review: true, review_reason: `Import incomplet — à compléter : lecture IA impossible — ligne d'origine : ${Object.entries(c.cells).filter(([, v]) => v.trim()).map(([k, v]) => `${k}: ${v.trim()}`).join(' | ')}`.slice(0, 1000),
+    });
+  }
+  if (aiErrors.length) errors.push(...aiErrors.slice(0, 5).map((e) => ({ row: 0, external_id: null, error: e })));
+  return {
+    orders, errors,
+    stats: { ai_rows: fresh.length, ai_extracted: results.size, ai_pending: Math.max(0, candidates.filter((c) => !existing.has(c.externalId)).length - fresh.length), unchanged_rows: existing.size },
+  };
+}
+
 export async function syncSheetSource(sourceId: string, trigger: 'schedule' | 'manual' | 'retry' = 'schedule', actorId?: string | null) {
   const db = createAdminClient();
   const { data: src, error } = await db.from('sheet_sources').select('*').eq('id', sourceId).single<SheetSource>();
   if (error || !src) throw new Error('sheet_source_not_found');
   const runId = await startRun('google_sheets', src.id, trigger, actorId);
-  const stats = { rows: 0, orders: 0, created: 0, updated: 0, unchanged: 0, errors: 0, unmatched: 0 };
+  const stats: Record<string, number> = { rows: 0, orders: 0, created: 0, updated: 0, unchanged: 0, errors: 0, unmatched: 0 };
   try {
     const { header, rows, headerRow } = await readSourceRows(src);
     if (headerRow !== src.header_row) await db.from('sheet_sources').update({ header_row: headerRow }).eq('id', src.id);
     stats.rows = rows.length;
-    const { orders, errors, missingColumns } = rowsToOrders(header, rows, src.column_mapping, src.options, headerRow + 1);
-    if (!orders.length && missingColumns.length) throw new Error(missingColumnsMessage(missingColumns, header));
+    let orders: ExternalOrder[];
+    let errors: { row: number; external_id: string | null; error: string }[];
+    const { aiExtractionAvailable } = await import('@/lib/integrations/google-sheets/ai-extract');
+    if (src.options.ai_extract && aiExtractionAvailable()) {
+      const r = await aiOrders(src, header, rows, headerRow);
+      orders = r.orders;
+      errors = r.errors;
+      Object.assign(stats, r.stats);
+    } else {
+      const r = rowsToOrders(header, rows, src.column_mapping, src.options, headerRow + 1);
+      if (!r.orders.length && r.missingColumns.length) throw new Error(missingColumnsMessage(r.missingColumns, header));
+      orders = r.orders;
+      errors = r.errors;
+    }
     stats.orders = orders.length;
 
     const rowErrors: { row_number: number | null; external_id: string | null; error: string; raw?: unknown }[] =
@@ -76,14 +150,14 @@ export async function syncSheetSource(sourceId: string, trigger: 'schedule' | 'm
         continue;
       }
       const r = data as { action: 'created' | 'updated' | 'unchanged'; unmatched?: boolean };
-      stats[r.action]++;
-      if (r.unmatched) stats.unmatched++;
+      stats[r.action] = (stats[r.action] ?? 0) + 1;
+      if (r.unmatched) stats.unmatched = (stats.unmatched ?? 0) + 1;
     }
     stats.errors = rowErrors.length;
     if (rowErrors.length) {
       await db.from('sheet_import_errors').insert(rowErrors.slice(0, 500).map((e) => ({ ...e, source_id: src.id, run_id: runId })));
     }
-    if (stats.unmatched > 0) {
+    if ((stats.unmatched ?? 0) > 0) {
       await db.rpc('notify_permission_throttled', {
         p_perm: 'products.manage', p_type: 'unmatched_product', p_params: { count: stats.unmatched, source: src.name },
         p_link: '/products/matching', p_window: '6 hours',

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { formatDateTime, type AppLocale } from '@/lib/format';
+import { aiExtractionAvailable } from '@/lib/integrations/google-sheets/ai-extract';
 import { ConnectionActions, MetaImportButton, ProviderEditor, ProviderTools, SourceActions, SourceEditor } from './integrations-client';
 
 export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ error?: string; connected?: string }> }) {
@@ -59,7 +60,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           )}
           <div className="flex items-center justify-between">
             <h3 className="font-medium">{t('integrations.sources')}</h3>
-            <SourceEditor connections={google.filter((c) => c.status === 'connected').map((c) => ({ id: c.id, label: c.account_label ?? '' }))} />
+            <SourceEditor aiAvailable={aiExtractionAvailable()} connections={google.filter((c) => c.status === 'connected').map((c) => ({ id: c.id, label: c.account_label ?? '' }))} />
           </div>
           <Table>
             <THead><TR><TH>{t('common.name')}</TH><TH>{t('integrations.worksheet')}</TH><TH>{t('integrations.syncEnabled')}</TH><TH>{t('common.lastSync')}</TH><TH /></TR></THead>
@@ -74,7 +75,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                     {s.last_sync_status ? <Badge className={s.last_sync_status === 'success' ? 'ms-1 bg-green-50 text-green-700 ring-green-200' : 'ms-1 bg-red-50 text-red-700 ring-red-200'}>{t(`common.${s.last_sync_status as 'success'}`)}</Badge> : null}
                     {s.last_sync_error ? <div className="max-w-xs truncate text-destructive" title={s.last_sync_error}>{s.last_sync_error}</div> : null}
                   </TD>
-                  <TD><SourceActions source={s} connections={google.map((c) => ({ id: c.id, label: c.account_label ?? '' }))} /></TD>
+                  <TD><SourceActions aiAvailable={aiExtractionAvailable()} source={s} connections={google.map((c) => ({ id: c.id, label: c.account_label ?? '' }))} /></TD>
                 </TR>
               ))}
             </TBody>

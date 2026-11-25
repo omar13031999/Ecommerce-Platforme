@@ -40,6 +40,8 @@ export type MappingOptions = {
   group_rows_by_external_id?: boolean; // default true
   price_is_line_total?: boolean; // product_price column holds qty*price
   date_format?: 'auto' | 'dmy' | 'mdy';
+  /** Read each row with AI (mixed-up columns); column mapping becomes optional. */
+  ai_extract?: boolean;
 };
 
 export type ExternalOrderItem = { product_name: string; sku?: string | null; quantity: number; unit_price: number };
@@ -253,9 +255,9 @@ export function rowsToOrders(
 }
 
 const REVIEW_LABELS: Record<string, string> = {
-  customer_name: 'nom', phone: 'téléphone', product_name: 'produit', wilaya: 'wilaya', product_price: 'prix',
+  customer_name: 'nom', phone: 'téléphone', product_name: 'produit', wilaya: 'wilaya', product_price: 'prix', commune: 'commune', address: 'adresse',
 };
-function reviewReason(fields: Set<string>): string {
+export function reviewReason(fields: Set<string>): string {
   return `Import incomplet — à compléter : ${[...fields].map((f) => REVIEW_LABELS[f] ?? f).join(', ')}`;
 }
 

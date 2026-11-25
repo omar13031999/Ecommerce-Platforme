@@ -37,3 +37,20 @@ requested.
 Attribution: put Meta campaign / ad IDs (or UTM campaign) into the order sheet columns `meta_campaign_id` /
 `meta_ad_id` to attribute spend to products precisely; otherwise map campaigns to products or let the estimate method
 allocate the remaining spend.
+
+## AI extraction of sheet rows (optional)
+
+For sheets whose columns are inconsistent (phone in the name column, "wilaya - commune" in one cell, product and
+price in free text), enable **Extraction intelligente par IA** in the source options.
+
+* Each **new** row is sent whole (headers + values) to the Claude API (`claude-opus-5-5`, low effort, structured
+  JSON output, server-side refusal fallback), in batches of 15 rows, at most 60 rows per sync — the rest is read on
+  the next sync. Rows already imported are never re-sent (no repeated cost; confirmers own them).
+* The product catalogue (reference | name) is sent with the instructions (prompt-cached) so products are mapped to
+  catalogue references when they clearly match.
+* Nothing is invented: absent values are null, the order is flagged *à vérifier* with the missing fields and the
+  original row text.
+* If the AI is unavailable (no key, invalid key, rate limit, error) the row falls back to the column mapping, or is
+  imported raw for manual completion — an import never blocks.
+* Requires `ANTHROPIC_API_KEY` (starts with `sk-ant-`) in the server environment. Cost is roughly a few tenths of a
+  dinar to ~1 DA per order at current Claude API prices, depending on row length.
