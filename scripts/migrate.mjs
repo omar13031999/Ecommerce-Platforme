@@ -71,11 +71,10 @@ try {
     }
   }
 
-  const owner = process.env.OWNER_EMAIL?.trim().toLowerCase();
-  if (owner) {
+  for (const owner of (process.env.OWNER_EMAIL ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)) {
     const exists = await client.query('select 1 from auth.users where lower(email) = $1', [owner]);
     if (!exists.rowCount) {
-      log('owner account not created yet in Supabase Auth');
+      log(`owner ${owner.replace(/^(.).*@/, '$1***@')} not created yet in Supabase Auth`);
     } else {
       const r = await client.query(
         `update auth.users set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin","active":true}'::jsonb
@@ -97,18 +96,6 @@ try {
         [owner],
       );
       log('owner state:', JSON.stringify(d.rows[0]));
-      const all = await client.query(
-        `select u.id, u.raw_app_meta_data as meta, p.role, p.is_active, p.updated_at
-           from auth.users u left join public.profiles p on p.id = u.id order by u.created_at`);
-      for (const row of all.rows) log('user', row.id, JSON.stringify(row.meta), row.role, row.is_active, row.updated_at);
-      const trg = await client.query(
-        `select event_object_schema || '.' || event_object_table as tbl, trigger_name, action_statement
-           from information_schema.triggers where event_object_table in ('users', 'profiles') order by 1, 2`);
-      for (const t of trg.rows) log('trigger', t.tbl, t.trigger_name, t.action_statement);
-      const audit = await client.query(
-        `select created_at, actor_label, action, before ->> 'is_active' as b, after ->> 'is_active' as a
-           from public.audit_logs where entity_type = 'profiles' order by created_at desc limit 10`);
-      for (const a of audit.rows) log('audit', a.created_at.toISOString(), a.actor_label, a.action, a.b, '->', a.a);
     }
   }
 } catch (e) {
