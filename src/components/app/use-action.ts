@@ -27,8 +27,9 @@ export function useAction() {
       try {
         const res = await action();
         if (!res.ok) {
-          const fields = res.fieldErrors ? Object.keys(res.fieldErrors).map((f) => (t.has(`fields.${f}`) ? t(`fields.${f}`) : f)).join(', ') : '';
-          toast.error(errorMessage(res.error, { fields, columns: fields }));
+          const { found, ...fieldErrors } = res.fieldErrors ?? {};
+          const fields = Object.keys(fieldErrors).map((f) => (t.has(`fields.${f}`) ? t(`fields.${f}`) : f)).join(', ');
+          toast.error(errorMessage(res.error, { fields, columns: fields }), found?.[0] ? { description: `${t('integrations.columnsFound')} ${found[0]}` } : undefined);
           return;
         }
         if (opts.success) toast.success(typeof opts.success === 'function' ? opts.success(res.data) : opts.success);

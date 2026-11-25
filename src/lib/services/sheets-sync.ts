@@ -1,7 +1,7 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSheet } from '@/lib/integrations/google-sheets/google';
-import { rowsToOrders, type ColumnMapping, type MappingOptions } from '@/lib/integrations/google-sheets/mapping';
+import { resolveColumns, rowsToOrders, REQUIRED_FIELDS, type ColumnMapping, type MappingOptions } from '@/lib/integrations/google-sheets/mapping';
 import { withRetry } from '@/lib/integrations/http';
 import { readPublicSheet } from '@/lib/integrations/google-sheets/public-sheet';
 import { googleAccessToken } from './google';
@@ -12,6 +12,41 @@ type SheetSource = {
   header_row: number; column_mapping: ColumnMapping; options: MappingOptions; consecutive_failures: number;
 };
 
+type ReadableSource = Pick<SheetSource, 'connection_id' | 'spreadsheet_id' | 'worksheet_title' | 'header_row' | 'column_mapping'>;
+
+function readRaw(src: ReadableSource, headerRow: number) {
+  const connectionId = src.connection_id;
+  return connectionId
+    ? withRetry(async () => readSheet(await googleAccessToken(connectionId), src.spreadsheet_id, src.worksheet_title, headerRow))
+    : withRetry(() => readPublicSheet(src.spreadsheet_id, src.worksheet_title, headerRow));
+}
+
+const hasRequired = (header: string[], mapping: ColumnMapping) =>
+  !resolveColumns(header, mapping).missing.some((f) => REQUIRED_FIELDS.includes(f));
+
+/**
+ * Reads the sheet at the configured header row. When the mapped columns are not
+ * there (header row changed, rows inserted above the header…), looks for the
+ * header in the first 30 rows and uses it.
+ */
+export async function readSourceRows(src: ReadableSource): Promise<{ header: string[]; rows: string[][]; headerRow: number }> {
+  const first = await readRaw(src, src.header_row);
+  if (hasRequired(first.header, src.column_mapping)) return { ...first, headerRow: src.header_row };
+  const all = src.header_row === 1 ? first : await readRaw(src, 1);
+  const lines = [all.header, ...all.rows];
+  for (let i = 0; i < Math.min(lines.length, 30); i++) {
+    const header = (lines[i] ?? []).map((h) => String(h ?? ''));
+    if (hasRequired(header, src.column_mapping)) return { header, rows: lines.slice(i + 1), headerRow: i + 1 };
+  }
+  return { ...first, headerRow: src.header_row };
+}
+
+/** "missing_columns:a,b|found:col1; col2" — the columns actually read help fixing the mapping. */
+export function missingColumnsMessage(missing: string[], header: string[]) {
+  const found = header.map((h) => String(h ?? '').trim()).filter(Boolean).slice(0, 25).join('; ');
+  return `missing_columns:${missing.join(',')}|found:${found || '(vide)'}`.slice(0, 500);
+}
+
 export async function syncSheetSource(sourceId: string, trigger: 'schedule' | 'manual' | 'retry' = 'schedule', actorId?: string | null) {
   const db = createAdminClient();
   const { data: src, error } = await db.from('sheet_sources').select('*').eq('id', sourceId).single<SheetSource>();
@@ -19,13 +54,11 @@ export async function syncSheetSource(sourceId: string, trigger: 'schedule' | 'm
   const runId = await startRun('google_sheets', src.id, trigger, actorId);
   const stats = { rows: 0, orders: 0, created: 0, updated: 0, unchanged: 0, errors: 0, unmatched: 0 };
   try {
-    const connectionId = src.connection_id;
-    const { header, rows } = connectionId
-      ? await withRetry(async () => readSheet(await googleAccessToken(connectionId), src.spreadsheet_id, src.worksheet_title, src.header_row))
-      : await withRetry(() => readPublicSheet(src.spreadsheet_id, src.worksheet_title, src.header_row));
+    const { header, rows, headerRow } = await readSourceRows(src);
+    if (headerRow !== src.header_row) await db.from('sheet_sources').update({ header_row: headerRow }).eq('id', src.id);
     stats.rows = rows.length;
-    const { orders, errors, missingColumns } = rowsToOrders(header, rows, src.column_mapping, src.options, src.header_row + 1);
-    if (!orders.length && missingColumns.length) throw new Error(`missing_columns:${missingColumns.join(',')}`);
+    const { orders, errors, missingColumns } = rowsToOrders(header, rows, src.column_mapping, src.options, headerRow + 1);
+    if (!orders.length && missingColumns.length) throw new Error(missingColumnsMessage(missingColumns, header));
     stats.orders = orders.length;
 
     const rowErrors: { row_number: number | null; external_id: string | null; error: string; raw?: unknown }[] =

@@ -696,6 +696,7 @@
     "accessMode": "طريقة الوصول",
     "publicLink": "رابط مشاركة عام (بدون مفاتيح Google)",
     "publicLinkHelp": "في Google Sheets: مشاركة ← الوصول العام ← «أي شخص لديه الرابط» (عارض)، ثم الصق هنا رابط الورقة (يحتوي على #gid=…). كل من يملك هذا الرابط يستطيع قراءة الجدول: لا تنشره.",
+    "columnsFound": "الأعمدة الموجودة في الورقة:",
     "googleOptional": "ربط حساب Google اختياري: يمكنك الاستيراد عبر رابط مشاركة عام. للوصول الخاص، اضبط GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET."
   },
   "notifications": {

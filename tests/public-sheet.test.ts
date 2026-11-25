@@ -25,3 +25,18 @@ describe('public Google Sheet (CSV export)', () => {
     expect(extractGid('https://docs.google.com/spreadsheets/d/x/edit?usp=sharing')).toBe('0');
   });
 });
+
+describe('header row detection', () => {
+  it('finds the header when the saved header row does not match the mapping', async () => {
+    const { readSourceRows, missingColumnsMessage } = await import('@/lib/services/sheets-sync');
+    const csv = 'Boutique Hanoutna,,,\nCommande,Nom,Téléphone,Produit\nA1,Karim,0555123456,Montre\n';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(csv, { headers: { 'content-type': 'text/csv' } })));
+    const r = await readSourceRows({
+      connection_id: null, spreadsheet_id: 'SHEETID123456789012345', worksheet_title: 'gid:0', header_row: 1,
+      column_mapping: { external_id: 'Commande', customer_name: 'Nom', phone: 'Téléphone', product_name: 'Produit' },
+    });
+    expect(r.headerRow).toBe(2);
+    expect(r.rows[0]).toEqual(['A1', 'Karim', '0555123456', 'Montre']);
+    expect(missingColumnsMessage(['phone'], ['ID', ' Nom '])).toBe('missing_columns:phone|found:ID; Nom');
+  });
+});

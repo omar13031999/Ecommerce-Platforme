@@ -7,9 +7,14 @@ import { listWorksheets, readSheet } from '@/lib/integrations/google-sheets/goog
 import { extractGid, extractSpreadsheetId, rowsToOrders, MAPPABLE_FIELDS } from '@/lib/integrations/google-sheets/mapping';
 import { readPublicSheet } from '@/lib/integrations/google-sheets/public-sheet';
 import { googleAccessToken } from '@/lib/services/google';
-import { syncSheetSource } from '@/lib/services/sheets-sync';
+import { missingColumnsMessage, readSourceRows, syncSheetSource } from '@/lib/services/sheets-sync';
 import { deleteSecret } from '@/lib/services/secrets';
 import { ProviderError } from '@/lib/integrations/http';
+
+function missingColumnsError(message: string) {
+  const [cols = '', found = ''] = message.slice('missing_columns:'.length).split('|found:');
+  return new AppError('missing_columns', 400, { ...Object.fromEntries(cols.split(',').filter(Boolean).map((c) => [c, ['missing']])), found: [found] });
+}
 
 function providerFail(e: unknown): never {
   if (e instanceof ProviderError) {
@@ -87,11 +92,9 @@ export async function testSheetSource(sourceId: string) {
     const { data: src } = await supabase.from('sheet_sources').select('*').eq('id', z.guid().parse(sourceId)).single();
     if (!src) throw new AppError('invalid_input');
     try {
-      const { header, rows } = src.connection_id
-        ? await readSheet(await googleAccessToken(src.connection_id), src.spreadsheet_id, src.worksheet_title, src.header_row)
-        : await readPublicSheet(src.spreadsheet_id, src.worksheet_title, src.header_row);
-      const r = rowsToOrders(header, rows, src.column_mapping, src.options, src.header_row + 1);
-      if (!r.orders.length && r.missingColumns.length) throw new AppError('missing_columns', 400, Object.fromEntries(r.missingColumns.map((c) => [c, ['missing']])));
+      const { header, rows, headerRow } = await readSourceRows(src);
+      const r = rowsToOrders(header, rows, src.column_mapping, src.options, headerRow + 1);
+      if (!r.orders.length && r.missingColumns.length) throw missingColumnsError(missingColumnsMessage(r.missingColumns, header));
       return { rows: rows.length, orders: r.orders.length, errors: r.errors.slice(0, 20) };
     } catch (e) { providerFail(e); }
   });
@@ -103,7 +106,7 @@ export async function syncSheetNow(sourceId: string) {
     try {
       return await syncSheetSource(z.guid().parse(sourceId), 'manual', s.userId);
     } catch (e) {
-      if (e instanceof Error && e.message.startsWith('missing_columns:')) throw new AppError('missing_columns', 400, Object.fromEntries(e.message.slice(16).split(',').map((c) => [c, ['missing']])));
+      if (e instanceof Error && e.message.startsWith('missing_columns:')) throw missingColumnsError(e.message);
       providerFail(e);
     }
   });

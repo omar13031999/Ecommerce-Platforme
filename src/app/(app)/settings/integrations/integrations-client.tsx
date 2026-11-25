@@ -112,7 +112,7 @@ export function SourceEditor({ connections, source }: { connections: { id: strin
             </Select></div>
           </div>
           <div className="flex flex-wrap items-end gap-3">
-            <div className="grid gap-1.5"><Label>{t('integrations.headerRow')}</Label><Input className="w-24" type="number" min={1} value={headerRow} onChange={(e) => setHeaderRow(Number(e.target.value))} /></div>
+            <div className="grid gap-1.5"><Label>{t('integrations.headerRow')}</Label><Input className="w-24" type="number" min={1} value={headerRow} onChange={(e) => { setHeaderRow(Number(e.target.value)); setHeader([]); setSample([]); }} /></div>
             <Button variant="outline" disabled={!spreadsheet || pending} onClick={() => load()}>{t('integrations.loadSheet')}</Button>
             {sheets.length ? (
               <div className="grid gap-1.5"><Label>{t('integrations.worksheet')}</Label>
