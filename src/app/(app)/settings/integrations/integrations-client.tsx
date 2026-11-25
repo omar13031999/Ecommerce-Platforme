@@ -103,13 +103,17 @@ export function SourceEditor({ connections, source }: { connections: { id: strin
       <DialogContent className="max-w-3xl">
         <DialogHeader><DialogTitle>{source ? t('integrations.editSource') : t('integrations.newSource')}</DialogTitle><DialogDescription>{t('integrations.fieldsRequired')}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
+          {!connectionId ? <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">{t('integrations.publicLinkHelp')}</p> : null}
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="grid gap-1.5 sm:col-span-2"><Label>{t('integrations.spreadsheetUrl')}</Label><Input dir="ltr" value={spreadsheet} onChange={(e) => setSpreadsheet(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></div>
-            <div className="grid gap-1.5"><Label>Google</Label><Select value={connectionId} onChange={(e) => setConnectionId(e.target.value)}>{connections.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</Select></div>
+            <div className="grid gap-1.5"><Label>{t('integrations.accessMode')}</Label><Select value={connectionId} onChange={(e) => setConnectionId(e.target.value)}>
+              <option value="">{t('integrations.publicLink')}</option>
+              {connections.map((c) => <option key={c.id} value={c.id}>Google: {c.label}</option>)}
+            </Select></div>
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <div className="grid gap-1.5"><Label>{t('integrations.headerRow')}</Label><Input className="w-24" type="number" min={1} value={headerRow} onChange={(e) => setHeaderRow(Number(e.target.value))} /></div>
-            <Button variant="outline" disabled={!spreadsheet || !connectionId || pending} onClick={() => load()}>{t('integrations.loadSheet')}</Button>
+            <Button variant="outline" disabled={!spreadsheet || pending} onClick={() => load()}>{t('integrations.loadSheet')}</Button>
             {sheets.length ? (
               <div className="grid gap-1.5"><Label>{t('integrations.worksheet')}</Label>
                 <Select className="w-48" value={worksheet} onChange={(e) => { setWorksheet(e.target.value); load(e.target.value); }}>{sheets.map((s) => <option key={s} value={s}>{s}</option>)}</Select>
@@ -152,7 +156,7 @@ export function SourceEditor({ connections, source }: { connections: { id: strin
         </div>
         <DialogFooter>
           <Button disabled={pending || !header.length || !worksheet} onClick={() => run(() => saveSheetSource({
-            id: source?.id, name: name || worksheet, connection_id: connectionId, spreadsheet_id: spreadsheet, worksheet_title: worksheet, header_row: headerRow,
+            id: source?.id, name: name || worksheet, connection_id: connectionId || null, spreadsheet_id: spreadsheet, worksheet_title: worksheet, header_row: headerRow,
             column_mapping: mapping as Record<MappableField, string>, options: opts, sync_enabled: sync, sync_interval_minutes: syncInterval,
           }), { success: t('common.saved'), onSuccess: () => setOpen(false) })}>{t('common.save')}</Button>
         </DialogFooter>

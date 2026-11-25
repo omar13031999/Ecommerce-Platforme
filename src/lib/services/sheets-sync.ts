@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { readSheet } from '@/lib/integrations/google-sheets/google';
 import { rowsToOrders, type ColumnMapping, type MappingOptions } from '@/lib/integrations/google-sheets/mapping';
 import { withRetry } from '@/lib/integrations/http';
+import { readPublicSheet } from '@/lib/integrations/google-sheets/public-sheet';
 import { googleAccessToken } from './google';
 import { finishRun, startRun } from './sync-log';
 
@@ -18,9 +19,10 @@ export async function syncSheetSource(sourceId: string, trigger: 'schedule' | 'm
   const runId = await startRun('google_sheets', src.id, trigger, actorId);
   const stats = { rows: 0, orders: 0, created: 0, updated: 0, unchanged: 0, errors: 0, unmatched: 0 };
   try {
-    if (!src.connection_id) throw new Error('google_not_connected');
-    const token = await googleAccessToken(src.connection_id);
-    const { header, rows } = await withRetry(() => readSheet(token, src.spreadsheet_id, src.worksheet_title, src.header_row));
+    const connectionId = src.connection_id;
+    const { header, rows } = connectionId
+      ? await withRetry(async () => readSheet(await googleAccessToken(connectionId), src.spreadsheet_id, src.worksheet_title, src.header_row))
+      : await withRetry(() => readPublicSheet(src.spreadsheet_id, src.worksheet_title, src.header_row));
     stats.rows = rows.length;
     const { orders, errors, missingColumns } = rowsToOrders(header, rows, src.column_mapping, src.options, src.header_row + 1);
     if (!orders.length && missingColumns.length) throw new Error(`missing_columns:${missingColumns.join(',')}`);

@@ -690,7 +690,11 @@
     "lastTest": "آخر اختبار",
     "api_key": "مفتاح API",
     "api_id": "معرف API",
-    "webhook_secret": "سر Webhook"
+    "webhook_secret": "سر Webhook",
+    "accessMode": "طريقة الوصول",
+    "publicLink": "رابط مشاركة عام (بدون مفاتيح Google)",
+    "publicLinkHelp": "في Google Sheets: مشاركة ← الوصول العام ← «أي شخص لديه الرابط» (عارض)، ثم الصق هنا رابط الورقة (يحتوي على #gid=…). كل من يملك هذا الرابط يستطيع قراءة الجدول: لا تنشره.",
+    "googleOptional": "ربط حساب Google اختياري: يمكنك الاستيراد عبر رابط مشاركة عام. للوصول الخاص، اضبط GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET."
   },
   "notifications": {
     "title": "الإشعارات",
@@ -748,7 +752,8 @@
     "note_too_long": "الملاحظة طويلة جداً.",
     "required": "حقل إلزامي",
     "invalid_phone": "هاتف غير صالح",
-    "invalid_json": "JSON غير صالح"
+    "invalid_json": "JSON غير صالح",
+    "provider_auth_sheet": "الجدول غير مشارك للعموم (عارض عبر الرابط)."
   },
   "fields": {
     "customer_name": "اسم الزبون",

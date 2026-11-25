@@ -252,3 +252,9 @@ export function extractSpreadsheetId(input: string): string | null {
   if (m) return m[1] ?? null;
   return /^[a-zA-Z0-9-_]{20,}$/.test(input.trim()) ? input.trim() : null;
 }
+
+/** Worksheet tab id ("gid") from a Google Sheets URL (#gid=123 or ?gid=123); defaults to the first tab. */
+export function extractGid(input: string): string {
+  const m = /[#&?]gid=(\d+)/.exec(input);
+  return m?.[1] ?? '0';
+}

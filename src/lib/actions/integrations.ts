@@ -4,23 +4,35 @@ import { createClient } from '@/lib/supabase/server';
 import { requireUser } from '@/lib/auth/session';
 import { AppError, fromDbError, runAction } from '@/lib/errors';
 import { listWorksheets, readSheet } from '@/lib/integrations/google-sheets/google';
-import { extractSpreadsheetId, rowsToOrders, MAPPABLE_FIELDS } from '@/lib/integrations/google-sheets/mapping';
+import { extractGid, extractSpreadsheetId, rowsToOrders, MAPPABLE_FIELDS } from '@/lib/integrations/google-sheets/mapping';
+import { readPublicSheet } from '@/lib/integrations/google-sheets/public-sheet';
 import { googleAccessToken } from '@/lib/services/google';
 import { syncSheetSource } from '@/lib/services/sheets-sync';
 import { deleteSecret } from '@/lib/services/secrets';
 import { ProviderError } from '@/lib/integrations/http';
 
 function providerFail(e: unknown): never {
-  if (e instanceof ProviderError) throw new AppError(`provider_${e.kind}`, 400, { message: [e.message] });
+  if (e instanceof ProviderError) {
+    if (e.message === 'sheet_not_public') throw new AppError('provider_auth_sheet', 400);
+    throw new AppError(`provider_${e.kind}`, 400, { message: [e.message] });
+  }
   throw e;
 }
 
 export async function loadSpreadsheet(input: { connectionId: string; spreadsheet: string; worksheet?: string; headerRow?: number }) {
   return runAction(async () => {
     await requireUser('integrations.manage');
-    const p = z.object({ connectionId: z.guid(), spreadsheet: z.string().min(5).max(300), worksheet: z.string().max(200).optional(), headerRow: z.number().int().min(1).max(1000).optional() }).parse(input);
+    const p = z.object({ connectionId: z.guid().or(z.literal('')), spreadsheet: z.string().min(5).max(500), worksheet: z.string().max(200).optional(), headerRow: z.number().int().min(1).max(1000).optional() }).parse(input);
     const id = extractSpreadsheetId(p.spreadsheet);
     if (!id) throw new AppError('invalid_input');
+    if (!p.connectionId) {
+      // Public link mode (no Google account connected)
+      const ws = p.worksheet?.startsWith('gid:') ? p.worksheet : `gid:${extractGid(p.spreadsheet)}`;
+      try {
+        const preview = await readPublicSheet(id, ws, p.headerRow ?? 1);
+        return { spreadsheetId: id, title: 'Google Sheet', sheets: [ws], worksheet: ws, header: preview.header.filter(Boolean), sample: preview.rows.slice(0, 3) };
+      } catch (e) { providerFail(e); }
+    }
     try {
       const token = await googleAccessToken(p.connectionId);
       const meta = await listWorksheets(token, id);
@@ -35,7 +47,7 @@ const mappingSchema = z.record(z.enum(MAPPABLE_FIELDS), z.string().max(200));
 const sourceSchema = z.object({
   id: z.guid().optional(),
   name: z.string().trim().min(1).max(120),
-  connection_id: z.guid(),
+  connection_id: z.guid().nullable(),
   spreadsheet_id: z.string().min(10).max(200),
   worksheet_title: z.string().min(1).max(200),
   header_row: z.number().int().min(1).max(1000),
@@ -73,10 +85,11 @@ export async function testSheetSource(sourceId: string) {
     await requireUser('integrations.manage');
     const supabase = await createClient();
     const { data: src } = await supabase.from('sheet_sources').select('*').eq('id', z.guid().parse(sourceId)).single();
-    if (!src?.connection_id) throw new AppError('integration_not_configured');
+    if (!src) throw new AppError('invalid_input');
     try {
-      const token = await googleAccessToken(src.connection_id);
-      const { header, rows } = await readSheet(token, src.spreadsheet_id, src.worksheet_title, src.header_row);
+      const { header, rows } = src.connection_id
+        ? await readSheet(await googleAccessToken(src.connection_id), src.spreadsheet_id, src.worksheet_title, src.header_row)
+        : await readPublicSheet(src.spreadsheet_id, src.worksheet_title, src.header_row);
       const r = rowsToOrders(header, rows, src.column_mapping, src.options, src.header_row + 1);
       if (!r.orders.length && r.missingColumns.length) throw new AppError('missing_columns', 400, Object.fromEntries(r.missingColumns.map((c) => [c, ['missing']])));
       return { rows: rows.length, orders: r.orders.length, errors: r.errors.slice(0, 20) };

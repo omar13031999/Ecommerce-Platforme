@@ -51,7 +51,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       <Card>
         <CardHeader><CardTitle>{t('integrations.google')}</CardTitle><CardDescription>{t('integrations.googleHelp')}</CardDescription></CardHeader>
         <CardContent className="grid gap-4">
-          {!isGoogleConfigured() ? <p className="text-sm text-warning">{t('integrations.googleNotConfigured')}</p> : (
+          {!isGoogleConfigured() ? <p className="text-sm text-muted-foreground">{t('integrations.googleOptional')}</p> : (
             <div className="grid gap-2">
               {google.map(conn)}
               <a className="inline-flex h-9 w-fit items-center rounded-md bg-primary px-4 text-sm text-primary-foreground hover:bg-primary/90" href="/api/oauth/google/start">{google.length ? t('common.reconnect') : t('common.connect')} Google</a>
@@ -59,7 +59,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           )}
           <div className="flex items-center justify-between">
             <h3 className="font-medium">{t('integrations.sources')}</h3>
-            {google.some((c) => c.status === 'connected') ? <SourceEditor connections={google.filter((c) => c.status === 'connected').map((c) => ({ id: c.id, label: c.account_label ?? '' }))} /> : null}
+            <SourceEditor connections={google.filter((c) => c.status === 'connected').map((c) => ({ id: c.id, label: c.account_label ?? '' }))} />
           </div>
           <Table>
             <THead><TR><TH>{t('common.name')}</TH><TH>{t('integrations.worksheet')}</TH><TH>{t('integrations.syncEnabled')}</TH><TH>{t('common.lastSync')}</TH><TH /></TR></THead>
