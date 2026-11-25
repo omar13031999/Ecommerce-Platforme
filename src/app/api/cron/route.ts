@@ -21,9 +21,14 @@ async function handle(req: Request) {
     console.error('[cron] server environment incomplete:', (e as Error).message);
     return NextResponse.json({ error: 'not_configured' }, { status: 503 });
   }
-  if (!safeEqual(auth, expected)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!safeEqual(auth, expected)) {
+    console.warn('[cron] rejected call without valid secret');
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const jobs = new URL(req.url).searchParams.get('jobs')?.split(',').filter(Boolean);
+  const started = Date.now();
   const results = await runScheduledJobs(jobs);
+  console.log(`[cron] ${results.map((r) => `${r.job}:${r.ok ? (r.skipped ?? 'ok') : 'FAILED'}`).join(' ')} (${Date.now() - started}ms)`);
   return NextResponse.json({ ok: results.every((r) => r.ok), results });
 }
 
