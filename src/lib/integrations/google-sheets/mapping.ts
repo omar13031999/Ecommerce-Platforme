@@ -29,7 +29,10 @@ export const MAPPABLE_FIELDS = [
   'meta_ad_id',
 ] as const;
 export type MappableField = (typeof MAPPABLE_FIELDS)[number];
-export const REQUIRED_FIELDS: readonly MappableField[] = ['external_id', 'customer_name', 'phone', 'product_name'];
+/** No column is mandatory: incomplete rows are imported and flagged for review. */
+export const REQUIRED_FIELDS: readonly MappableField[] = [];
+/** Fields reported in the review note when a row does not provide them. */
+const REVIEW_FIELDS = ['customer_name', 'phone', 'product_name', 'wilaya'] as const;
 
 export type ColumnMapping = Partial<Record<MappableField, string>>;
 export type MappingOptions = {
@@ -59,6 +62,8 @@ export type ExternalOrder = {
   meta_ad_id?: string | null;
   items: ExternalOrderItem[];
   row_numbers: number[];
+  needs_review?: boolean;
+  review_reason?: string | null;
 };
 export type RowError = { row: number; external_id: string | null; error: string };
 
@@ -140,19 +145,24 @@ export function resolveColumns(header: string[], mapping: ColumnMapping) {
   const missing: MappableField[] = [];
   for (const field of MAPPABLE_FIELDS) {
     const colName = mapping[field];
-    if (!colName) {
-      if (REQUIRED_FIELDS.includes(field)) missing.push(field);
-      continue;
-    }
+    if (!colName) continue;
     const idx = index.get(norm(colName));
-    if (idx === undefined) {
-      if (REQUIRED_FIELDS.includes(field)) missing.push(field);
-      else missing.push(field);
-      continue;
-    }
-    cols[field] = idx;
+    if (idx === undefined) missing.push(field);
+    else cols[field] = idx;
   }
-  return { cols, missing };
+  return { cols, missing, found: Object.keys(cols).length };
+}
+
+/** Stable id for rows without an order id: same row content -> same id on every sync. */
+export function rowFingerprint(parts: string[]): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (const ch of parts.map((p) => p.trim().toLowerCase()).join('\u241f')) {
+    const c = ch.codePointAt(0)!;
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x5bd1e995) >>> 0;
+  }
+  return `auto-${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`;
 }
 
 export function rowsToOrders(
@@ -162,9 +172,9 @@ export function rowsToOrders(
   options: MappingOptions = {},
   firstDataRowNumber = 2,
 ): { orders: ExternalOrder[]; errors: RowError[]; missingColumns: MappableField[] } {
-  const { cols, missing } = resolveColumns(header, mapping);
-  const requiredMissing = missing.filter((f) => REQUIRED_FIELDS.includes(f));
-  if (requiredMissing.length) return { orders: [], errors: [], missingColumns: missing };
+  const { cols, missing, found } = resolveColumns(header, mapping);
+  // Nothing recognised at all: wrong tab / header row — report instead of importing garbage.
+  if (!found) return { orders: [], errors: [], missingColumns: missing.length ? missing : ['external_id'] };
 
   const group = options.group_rows_by_external_id !== false;
   const byId = new Map<string, ExternalOrder>();
@@ -178,21 +188,13 @@ export function rowsToOrders(
     };
     if (row.every((c) => !String(c ?? '').trim())) return; // blank line
 
-    const externalId = get('external_id');
-    if (!externalId) {
-      errors.push({ row: rowNumber, external_id: null, error: 'missing_external_id' });
-      return;
-    }
     const name = get('customer_name');
     const phone = get('phone');
-    const productCell = get('product_name');
-    if (!name || !phone || !productCell) {
-      errors.push({ row: rowNumber, external_id: externalId, error: !name ? 'missing_customer_name' : !phone ? 'missing_phone' : 'missing_product' });
-      return;
-    }
-
+    const productCell = get('product_name') || get('sku');
+    const externalId = get('external_id') || rowFingerprint([get('created_at'), phone, name, productCell, get('total_amount')]);
+    const missingInfo = new Set<string>(REVIEW_FIELDS.filter((f) => !get(f) && !(f === 'product_name' && productCell)));
     const sep = options.multi_product_separator || undefined;
-    const names = splitCell(productCell, sep);
+    const names = productCell ? splitCell(productCell, sep) : [];
     const skus = splitCell(get('sku'), sep);
     const qtys = splitCell(get('quantity'), sep);
     const prices = splitCell(get('product_price'), sep);
@@ -203,17 +205,19 @@ export function rowsToOrders(
       const quantity = Math.max(1, Math.round(parseAmount(qtyRaw) ?? token.quantity ?? 1));
       let unit = parseAmount(prices[k] ?? (names.length === 1 ? prices[0] : undefined));
       if (unit !== null && options.price_is_line_total) unit = unit / quantity;
-      if (unit === null) {
-        errors.push({ row: rowNumber, external_id: externalId, error: 'missing_price' });
-        return;
-      }
-      items.push({ product_name: token.name, sku: skus[k] || null, quantity, unit_price: Math.round(unit * 100) / 100 });
+      if (unit === null) missingInfo.add('product_price');
+      items.push({ product_name: token.name, sku: skus[k] || null, quantity, unit_price: Math.round((unit ?? 0) * 100) / 100 });
     }
+    if (!productCell) missingInfo.add('product_name');
 
     const existing = group ? byId.get(externalId) : undefined;
     if (existing) {
       existing.items.push(...items);
       existing.row_numbers.push(rowNumber);
+      if (missingInfo.size && !existing.needs_review) {
+        existing.needs_review = true;
+        existing.review_reason = reviewReason(missingInfo);
+      }
       return;
     }
     if (!group && byId.has(externalId)) {
@@ -240,10 +244,19 @@ export function rowsToOrders(
       meta_ad_id: get('meta_ad_id') || null,
       items,
       row_numbers: [rowNumber],
+      needs_review: missingInfo.size > 0,
+      review_reason: missingInfo.size ? reviewReason(missingInfo) : null,
     });
   });
 
   return { orders: [...byId.values()], errors, missingColumns: missing };
+}
+
+const REVIEW_LABELS: Record<string, string> = {
+  customer_name: 'nom', phone: 'téléphone', product_name: 'produit', wilaya: 'wilaya', product_price: 'prix',
+};
+function reviewReason(fields: Set<string>): string {
+  return `Import incomplet — à compléter : ${[...fields].map((f) => REVIEW_LABELS[f] ?? f).join(', ')}`;
 }
 
 /** Accepts a full Google Sheets URL or a bare spreadsheet ID. */

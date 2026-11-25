@@ -2,6 +2,7 @@
 import { CommuneSelect, type CommuneOption } from '@/components/app/commune-select';
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import { Ban, Check, Copy, PhoneMissed, PhoneOff, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/input';
@@ -14,27 +15,44 @@ import {
   setDeliveryManual, submitToDelivery, updateOrderCustomer,
 } from '@/lib/actions/orders';
 
-export function StatusActions({ orderId, status, version, isManager }: { orderId: string; status: ConfirmationStatus; version: number; isManager: boolean }) {
+export function StatusActions({ orderId, status, version, isManager, beforeChange, confirmBlockers }: {
+  orderId: string; status: ConfirmationStatus; version: number; isManager: boolean;
+  /** Saves pending edits first; returns the new order version, or null to abort. */
+  beforeChange?: () => Promise<number | null>;
+  /** Missing fields that prevent confirming the order. */
+  confirmBlockers?: string[];
+}) {
   const t = useTranslations();
   const { run, pending } = useAction();
   const [note, setNote] = useState('');
   const [manual, setManual] = useState<string>('');
   const next = nextNoAnswer(status);
 
-  const apply = (s: ConfirmationStatus) =>
-    run(() => changeConfirmationStatus({ orderId, status: s, note, version }), {
+  const apply = async (s: ConfirmationStatus) => {
+    if (s === 'confirmed' && confirmBlockers?.length) {
+      toast.error(t('orders.completeBeforeConfirm', { fields: confirmBlockers.join(', ') }));
+      return;
+    }
+    let v = version;
+    if (beforeChange) {
+      const saved = await beforeChange();
+      if (saved === null) return;
+      v = saved;
+    }
+    run(() => changeConfirmationStatus({ orderId, status: s, note, version: v }), {
       success: t(`confirmation.${s}`),
       onSuccess: () => setNote(''),
     });
+  };
 
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap gap-2">
-        <Button variant="success" disabled={pending || status === 'confirmed'} onClick={() => apply('confirmed')}><Check />{t('orders.markConfirmed')}</Button>
-        {next ? <Button variant="warning" disabled={pending} onClick={() => apply(next)}><PhoneMissed />{t('orders.noAnswerNext')} ({next.slice(-1)})</Button> : null}
-        <Button variant="outline" disabled={pending || status === 'unreachable'} onClick={() => apply('unreachable')}><PhoneOff />{t('orders.markUnreachable')}</Button>
-        <Button variant="outline" disabled={pending || status === 'duplicate'} onClick={() => apply('duplicate')}><Copy />{t('orders.markDuplicate')}</Button>
-        <Button variant="destructive" disabled={pending || status === 'cancelled'} onClick={() => apply('cancelled')}><Ban />{t('orders.markCancelled')}</Button>
+        <Button variant="success" disabled={pending || status === 'confirmed'} onClick={() => void apply('confirmed')}><Check />{t('orders.markConfirmed')}</Button>
+        {next ? <Button variant="warning" disabled={pending} onClick={() => void apply(next)}><PhoneMissed />{t('orders.noAnswerNext')} ({next.slice(-1)})</Button> : null}
+        <Button variant="outline" disabled={pending || status === 'unreachable'} onClick={() => void apply('unreachable')}><PhoneOff />{t('orders.markUnreachable')}</Button>
+        <Button variant="outline" disabled={pending || status === 'duplicate'} onClick={() => void apply('duplicate')}><Copy />{t('orders.markDuplicate')}</Button>
+        <Button variant="destructive" disabled={pending || status === 'cancelled'} onClick={() => void apply('cancelled')}><Ban />{t('orders.markCancelled')}</Button>
       </div>
       <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('orders.statusNote')} maxLength={4000} rows={2} />
       {isManager ? (
@@ -43,7 +61,7 @@ export function StatusActions({ orderId, status, version, isManager }: { orderId
             <option value="">{t('orders.changeStatus')}…</option>
             {CONFIRMATION_STATUSES.map((s) => <option key={s} value={s}>{t(`confirmation.${s}`)}</option>)}
           </Select>
-          <Button variant="outline" disabled={!manual || pending} onClick={() => apply(manual as ConfirmationStatus)}>{t('common.apply')}</Button>
+          <Button variant="outline" disabled={!manual || pending} onClick={() => void apply(manual as ConfirmationStatus)}>{t('common.apply')}</Button>
         </div>
       ) : null}
     </div>

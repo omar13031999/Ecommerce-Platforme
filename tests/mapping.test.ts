@@ -61,12 +61,30 @@ describe('rowsToOrders', () => {
     ]);
   });
 
-  it('reports row-level errors and missing required columns', () => {
-    const rows = [['', 'X', '0555', '', '', '', 'P', '1', '10', '', ''], ['C1', 'Y', '0555', '', '', '', 'P', '1', '', '', '']];
-    const { errors } = rowsToOrders(header, rows, mapping);
-    expect(errors.map((e) => e.error)).toEqual(['missing_external_id', 'missing_price']);
-    const r = rowsToOrders(['a'], rows, mapping);
-    expect(r.missingColumns).toContain('external_id');
+  it('imports incomplete rows as they are and flags them for review', () => {
+    const rows = [
+      ['', 'X', '0555', '', '', '', 'P', '1', '10', '', ''], // no order id
+      ['C1', 'Y', '0555', '', '', '', 'P', '1', '', '', ''], // no price
+      ['C2', '', '', '', '', '', '', '', '', '', ''], // only an id
+    ];
+    const { orders, errors } = rowsToOrders(header, rows, mapping);
+    expect(errors).toEqual([]);
+    expect(orders).toHaveLength(3);
+    expect(orders[0]!.external_id).toMatch(/^auto-[0-9a-f]{16}$/);
+    expect(orders[1]).toMatchObject({ external_id: 'C1', needs_review: true, items: [{ product_name: 'P', unit_price: 0 }] });
+    expect(orders[1]!.review_reason).toContain('prix');
+    expect(orders[2]).toMatchObject({ external_id: 'C2', customer_name: '', phone: '', items: [], needs_review: true });
+    expect(orders[2]!.review_reason).toContain('téléphone');
+  });
+
+  it('gives the same id to the same row on every sync', () => {
+    const row = [['', 'X', '0555', '', '', '', 'P', '1', '10', '', '']];
+    expect(rowsToOrders(header, row, mapping).orders[0]!.external_id).toBe(rowsToOrders(header, row, mapping).orders[0]!.external_id);
+  });
+
+  it('reports a sheet where no mapped column is found', () => {
+    const r = rowsToOrders(['a'], [['x']], mapping);
+    expect(r.missingColumns.length).toBeGreaterThan(0);
     expect(r.orders).toEqual([]);
   });
 

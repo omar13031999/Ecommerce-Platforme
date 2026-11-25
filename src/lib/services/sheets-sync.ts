@@ -1,7 +1,7 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { readSheet } from '@/lib/integrations/google-sheets/google';
-import { resolveColumns, rowsToOrders, REQUIRED_FIELDS, type ColumnMapping, type MappingOptions } from '@/lib/integrations/google-sheets/mapping';
+import { resolveColumns, rowsToOrders, type ColumnMapping, type MappingOptions } from '@/lib/integrations/google-sheets/mapping';
 import { withRetry } from '@/lib/integrations/http';
 import { readPublicSheet } from '@/lib/integrations/google-sheets/public-sheet';
 import { googleAccessToken } from './google';
@@ -21,24 +21,27 @@ function readRaw(src: ReadableSource, headerRow: number) {
     : withRetry(() => readPublicSheet(src.spreadsheet_id, src.worksheet_title, headerRow));
 }
 
-const hasRequired = (header: string[], mapping: ColumnMapping) =>
-  !resolveColumns(header, mapping).missing.some((f) => REQUIRED_FIELDS.includes(f));
+const score = (header: string[], mapping: ColumnMapping) => resolveColumns(header, mapping).found;
 
 /**
- * Reads the sheet at the configured header row. When the mapped columns are not
- * there (header row changed, rows inserted above the header…), looks for the
- * header in the first 30 rows and uses it.
+ * Reads the sheet at the configured header row. When some mapped columns are not
+ * there (header row changed, rows inserted above the header…), looks for the row
+ * of the first 30 that matches the most mapped columns and uses it.
  */
 export async function readSourceRows(src: ReadableSource): Promise<{ header: string[]; rows: string[][]; headerRow: number }> {
   const first = await readRaw(src, src.header_row);
-  if (hasRequired(first.header, src.column_mapping)) return { ...first, headerRow: src.header_row };
+  const wanted = Object.values(src.column_mapping).filter(Boolean).length;
+  const firstScore = score(first.header, src.column_mapping);
+  if (firstScore >= wanted) return { ...first, headerRow: src.header_row };
   const all = src.header_row === 1 ? first : await readRaw(src, 1);
   const lines = [all.header, ...all.rows];
+  let best = { i: -1, s: firstScore };
   for (let i = 0; i < Math.min(lines.length, 30); i++) {
-    const header = (lines[i] ?? []).map((h) => String(h ?? ''));
-    if (hasRequired(header, src.column_mapping)) return { header, rows: lines.slice(i + 1), headerRow: i + 1 };
+    const sc = score((lines[i] ?? []).map((h) => String(h ?? '')), src.column_mapping);
+    if (sc > best.s) best = { i, s: sc };
   }
-  return { ...first, headerRow: src.header_row };
+  if (best.i < 0) return { ...first, headerRow: src.header_row };
+  return { header: (lines[best.i] ?? []).map((h) => String(h ?? '')), rows: lines.slice(best.i + 1), headerRow: best.i + 1 };
 }
 
 /** "missing_columns:a,b|found:col1; col2" — the columns actually read help fixing the mapping. */

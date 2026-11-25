@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ConfirmationWorkspace } from './workspace';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { AlertTriangle, ArrowLeft, Copy, ExternalLink, PackageX } from 'lucide-react';
@@ -10,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { ConfirmationBadge, DeliveryBadge } from '@/components/app/status-badge';
 import { formatDZD, formatDateTime, type AppLocale } from '@/lib/format';
 import { isConfirmationStatus, isDeliveryStatus, type ConfirmationStatus, type DeliveryStatus } from '@/lib/domain/statuses';
-import { StatusActions, NoteForm, CustomerEditor, AssignControl, DeliveryControl, ReviewControl, ItemMatcher } from './order-actions';
+import { NoteForm, AssignControl, DeliveryControl, ReviewControl, ItemMatcher } from './order-actions';
 
 type Event = { id: number; actor_id: string | null; actor_label: string | null; event_type: string; field: string | null; old_value: string | null; new_value: string | null; note: string | null; metadata: Record<string, string>; created_at: string };
 
@@ -45,7 +46,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     canDeliveryView ? supabase.from('delivery_events').select('id, source, provider_status, internal_status, occurred_at').eq('order_id', id).order('occurred_at', { ascending: false }) : Promise.resolve({ data: null }),
     session.can('delivery.manage') ? supabase.from('delivery_providers').select('id, name, code').eq('is_active', true) : Promise.resolve({ data: [] }),
     canFinance ? supabase.from('order_profit').select('*').eq('order_id', id).maybeSingle() : Promise.resolve({ data: null }),
-    session.can('products.manage') || session.can('orders.manage') ? supabase.from('products').select('id, name, sku').eq('is_archived', false).order('name') : Promise.resolve({ data: [] }),
+    supabase.from('products').select('id, name, sku, selling_price').eq('is_archived', false).order('name'),
     supabase.from('wilayas').select('code, name_fr, name_ar').order('code'),
     supabase.from('communes').select('wilaya_code, name, has_stop_desk').eq('is_active', true).order('name').range(0, 4999),
   ]);
@@ -117,26 +118,33 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="grid gap-4 lg:col-span-2">
           {canWork ? (
-            <Card>
-              <CardHeader><CardTitle>{t('orders.changeStatus')}</CardTitle></CardHeader>
+            <Card className="border-primary/30">
+              <CardHeader><CardTitle>{t('orders.workspace')}</CardTitle></CardHeader>
               <CardContent>
-                <StatusActions orderId={order.id} status={order.confirmation_status} version={order.version} isManager={session.can('orders.manage')} />
+                <ConfirmationWorkspace
+                  orderId={order.id}
+                  version={order.version}
+                  status={order.confirmation_status}
+                  isManager={session.can('orders.manage')}
+                  initial={{
+                    customer_name: order.customer_name, phone: order.phone ?? '', phone2: order.phone2 ?? '', wilaya_code: order.wilaya_code,
+                    commune: order.commune ?? '', address: order.address ?? '', delivery_type: order.delivery_type, customer_notes: order.customer_notes ?? '',
+                  }}
+                  items={(items.data ?? []).map((i) => ({ id: i.id, product_id: i.product_id, product_name: i.product_name, sku: i.sku, quantity: i.quantity, unit_price: Number(i.unit_price) }))}
+                  catalog={(products.data ?? []).map((p) => ({ ...p, selling_price: Number(p.selling_price) }))}
+                  wilayas={(wilayas.data ?? []).map((w) => ({ code: w.code, name: locale === 'ar' ? w.name_ar : w.name_fr }))}
+                  communes={communes.data ?? []}
+                  deliveryFee={Number(order.delivery_fee)}
+                  discount={Number(order.discount)}
+                  reviewReason={order.needs_review ? order.review_reason ?? t('orders.needsReview') : null}
+                />
               </CardContent>
             </Card>
-          ) : null}
-
+          ) : (
+            <>
           <Card>
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle>{t('orders.customer')}</CardTitle>
-              {canWork ? (
-                <CustomerEditor
-                  orderId={order.id}
-                  version={order.version}
-                  initial={{ customer_name: order.customer_name, phone: order.phone, phone2: order.phone2 ?? '', wilaya_code: order.wilaya_code, commune: order.commune ?? '', address: order.address ?? '', delivery_type: order.delivery_type }}
-                  wilayas={(wilayas.data ?? []).map((w) => ({ code: w.code, name: locale === 'ar' ? w.name_ar : w.name_fr }))}
-                  communes={communes.data ?? []}
-                />
-              ) : null}
             </CardHeader>
             <CardContent>
               <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
@@ -163,7 +171,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                       <TD>
                         <div className="font-medium">{i.product_name}{i.variant ? ` (${i.variant})` : ''}</div>
                         {i.sku ? <div className="text-xs text-muted-foreground">{i.sku}</div> : null}
-                        {!i.product_id && (products.data ?? []).length ? <ItemMatcher itemId={i.id} products={products.data ?? []} /> : null}
+                        {!i.product_id && session.can('orders.manage') && (products.data ?? []).length ? <ItemMatcher itemId={i.id} products={products.data ?? []} /> : null}
                       </TD>
                       <TD className="tabular">{i.quantity}</TD>
                       <TD className="tabular">{formatDZD(i.unit_price, locale)}</TD>
@@ -178,6 +186,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               </Table>
             </CardContent>
           </Card>
+
+            </>
+          )}
 
           {profit.data ? (
             <Card className="border-primary/30">

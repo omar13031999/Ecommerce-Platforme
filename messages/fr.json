@@ -296,7 +296,15 @@
     "dateTo": "Au",
     "anyStatus": "Tous les statuts",
     "onlyReview": "À revoir uniquement",
-    "onlyWaiting": "Sans agent uniquement"
+    "onlyWaiting": "Sans agent uniquement",
+    "workspace": "Fiche de commande",
+    "deliveryAddress": "Livraison",
+    "call": "Appeler",
+    "chooseProduct": "Choisir le produit",
+    "productFreeText": "Nom du produit (si absent du catalogue)",
+    "addProduct": "Ajouter un produit",
+    "unsavedChanges": "Modifications non enregistrées",
+    "completeBeforeConfirm": "Complétez avant de confirmer : {fields}"
   },
   "deliveryPage": {
     "title": "Livraison",
@@ -786,7 +794,9 @@
     "required": "Champ obligatoire",
     "invalid_phone": "Téléphone invalide",
     "invalid_json": "JSON invalide",
-    "provider_auth_sheet": "La feuille n’est pas partagée publiquement (lecteur avec le lien)."
+    "provider_auth_sheet": "La feuille n’est pas partagée publiquement (lecteur avec le lien).",
+    "invalid_items": "Produits invalides : chaque ligne doit avoir un produit, une quantité ≥ 1 et un prix.",
+    "product_not_found": "Produit introuvable ou archivé."
   },
   "fields": {
     "customer_name": "nom du client",

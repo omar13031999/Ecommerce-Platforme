@@ -72,7 +72,7 @@ export async function saveSheetSource(input: z.input<typeof sourceSchema>) {
     const s = await requireUser('integrations.manage');
     const p = sourceSchema.parse(input);
     const mapping = Object.fromEntries(Object.entries(p.column_mapping).filter(([, v]) => v));
-    for (const f of ['external_id', 'customer_name', 'phone', 'product_name']) if (!mapping[f]) throw new AppError('missing_columns', 400, { [f]: ['required'] });
+    if (!Object.keys(mapping).length) throw new AppError('missing_columns', 400, { phone: ['required'] });
     const supabase = await createClient();
     const row = { ...p, column_mapping: mapping };
     delete (row as { id?: string }).id;

@@ -296,7 +296,15 @@
     "dateTo": "إلى",
     "anyStatus": "كل الحالات",
     "onlyReview": "للمراجعة فقط",
-    "onlyWaiting": "بدون موظف فقط"
+    "onlyWaiting": "بدون موظف فقط",
+    "workspace": "بطاقة الطلبية",
+    "deliveryAddress": "التوصيل",
+    "call": "اتصال",
+    "chooseProduct": "اختر المنتج",
+    "productFreeText": "اسم المنتج (إن لم يكن في القائمة)",
+    "addProduct": "إضافة منتج",
+    "unsavedChanges": "تعديلات غير محفوظة",
+    "completeBeforeConfirm": "أكمل قبل التأكيد: {fields}"
   },
   "deliveryPage": {
     "title": "التوصيل",
@@ -786,7 +794,9 @@
     "required": "حقل إلزامي",
     "invalid_phone": "هاتف غير صالح",
     "invalid_json": "JSON غير صالح",
-    "provider_auth_sheet": "الجدول غير مشارك للعموم (عارض عبر الرابط)."
+    "provider_auth_sheet": "الجدول غير مشارك للعموم (عارض عبر الرابط).",
+    "invalid_items": "منتجات غير صالحة: كل سطر يحتاج منتجاً وكمية ≥ 1 وسعراً.",
+    "product_not_found": "المنتج غير موجود أو مؤرشف."
   },
   "fields": {
     "customer_name": "اسم الزبون",

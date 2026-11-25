@@ -35,13 +35,14 @@ export async function addOrderNote(input: { orderId: string; body: string }) {
 }
 
 const customerSchema = z.object({
-  customer_name: z.string().trim().min(1).max(200),
-  phone: z.string().trim().min(6).max(30),
+  customer_name: z.string().trim().max(200),
+  phone: z.string().trim().max(30).refine((v) => v === '' || v.replace(/\D/g, '').length >= 9, 'invalid_phone'),
   phone2: z.string().trim().max(30).optional().default(''),
   wilaya_code: z.coerce.number().int().min(1).max(58).nullable().optional(),
   commune: z.string().trim().max(120).optional().default(''),
   address: z.string().trim().max(500).optional().default(''),
   delivery_type: z.enum(['home', 'stopdesk']),
+  customer_notes: z.string().trim().max(2000).optional(),
 });
 
 export async function updateOrderCustomer(input: { orderId: string; version?: number; patch: unknown }) {
@@ -51,8 +52,31 @@ export async function updateOrderCustomer(input: { orderId: string; version?: nu
     const patch = customerSchema.safeParse(input.patch);
     if (!patch.success) throw new AppError('invalid_input', 400, patch.error.flatten().fieldErrors);
     const supabase = await createClient();
-    const { error } = await supabase.rpc('update_order_customer', { p_order_id: id, p_patch: patch.data, p_expected_version: input.version ?? null });
+    const { data, error } = await supabase.rpc('update_order_customer', { p_order_id: id, p_patch: patch.data, p_expected_version: input.version ?? null });
     if (error) throw fromDbError(error);
+    return data as number;
+  });
+}
+
+const itemsSchema = z.array(z.object({
+  id: z.guid().optional(),
+  product_id: z.guid().nullable().optional(),
+  product_name: z.string().trim().max(300).optional(),
+  quantity: z.coerce.number().int().min(1).max(10_000),
+  unit_price: z.coerce.number().min(0).max(100_000_000),
+})).min(1).max(50);
+
+/** Replaces the product lines of an order (assigned agent or manager, before delivery). */
+export async function updateOrderItems(input: { orderId: string; version?: number; items: unknown }) {
+  return runAction(async () => {
+    await requireUser();
+    const id = uuid.parse(input.orderId);
+    const items = itemsSchema.safeParse(input.items);
+    if (!items.success) throw new AppError('invalid_items', 400);
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc('update_order_items', { p_order_id: id, p_items: items.data, p_expected_version: input.version ?? null });
+    if (error) throw fromDbError(error);
+    return data as number;
   });
 }
 
