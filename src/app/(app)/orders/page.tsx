@@ -67,11 +67,12 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           <Link href="/orders/new" className={buttonVariants()}><Plus />{t('orders.new')}</Link>
         ) : null}
       />
-      <nav className="mb-3 flex gap-1 border-b" aria-label={t('orders.title')}>
+      <nav className="mb-4 flex flex-wrap gap-1.5 rounded-xl border border-border/70 bg-card p-1.5 shadow-sm" aria-label={t('orders.title')}>
         {tabs.map((tab) => (
-          <Link key={tab.key} href={tab.href} className={cn('-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium',
-            view === tab.key ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
-            {tab.label}<span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular">{tab.count}</span>
+          <Link key={tab.key} href={tab.href} className={cn('flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-all',
+            view === tab.key ? 'bg-brand text-white shadow-md shadow-primary/25' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
+            {tab.label}
+            <span className={cn('rounded-full px-2 py-0.5 text-xs tabular', view === tab.key ? 'bg-white/20 text-white' : 'bg-muted text-foreground')}>{tab.count}</span>
           </Link>
         ))}
       </nav>

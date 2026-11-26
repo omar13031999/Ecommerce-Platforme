@@ -110,7 +110,9 @@
     "signIn": "Se connecter",
     "invalidCredentials": "Identifiants invalides",
     "inactive": "Compte inactif. Contactez l'administrateur.",
-    "accessDenied": "Vous n'avez pas accès à cette page."
+    "accessDenied": "Vous n'avez pas accès à cette page.",
+    "heroTitle": "Vos commandes, de la confirmation à la livraison.",
+    "heroText": "Confirmez plus vite, suivez chaque colis ECOTRACK et gardez le contrôle de vos marges — au même endroit."
   },
   "range": {
     "today": "Aujourd'hui",

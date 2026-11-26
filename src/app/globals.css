@@ -29,7 +29,12 @@
     --border: 220 13% 89%;
     --input: 220 13% 86%;
     --ring: 158 64% 32%;
-    --radius: 0.6rem;
+    --radius: 0.75rem;
+    --sidebar: 162 48% 14%;
+    --sidebar-foreground: 150 20% 92%;
+    --sidebar-muted: 155 18% 66%;
+    --sidebar-accent: 160 45% 22%;
+    --sidebar-active: 152 62% 52%;
   }
   @media (prefers-color-scheme: dark) {
     :root:not(.light) {
@@ -51,11 +56,25 @@
       --border: 222 18% 20%;
       --input: 222 18% 24%;
       --ring: 158 55% 45%;
+      --sidebar: 165 40% 8%;
+      --sidebar-accent: 162 35% 15%;
     }
   }
   * { @apply border-border; }
-  body { @apply bg-background font-sans text-foreground antialiased; }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    background-image:
+      radial-gradient(1200px 500px at 100% -10%, hsl(var(--accent) / 0.9), transparent 60%),
+      radial-gradient(900px 400px at -10% 110%, hsl(var(--primary) / 0.05), transparent 60%);
+    background-attachment: fixed;
+  }
   html[dir='rtl'] body { @apply font-arabic; }
   /* Tabular figures for amounts */
   .tabular { font-variant-numeric: tabular-nums; }
+}
+
+@layer components {
+  /* Brand gradient used for highlights (logo, active tab, hero). */
+  .bg-brand { background-image: linear-gradient(135deg, hsl(158 64% 34%), hsl(172 66% 30%) 55%, hsl(190 70% 32%)); }
+  .text-brand { background-image: linear-gradient(135deg, hsl(158 64% 32%), hsl(190 70% 35%)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 }

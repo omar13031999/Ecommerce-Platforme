@@ -12,12 +12,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const isAgent = session.profile.role === 'agent';
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 overflow-y-auto border-e bg-card md:block">
-        <Link href="/dashboard" className="flex h-14 items-center gap-2 border-b px-4">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">GC</span>
-          <span className="text-sm font-semibold">{t('app.name')}</span>
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto bg-sidebar text-sidebar-foreground md:block">
+        <Link href="/dashboard" className="flex h-16 items-center gap-3 px-5">
+          <span className="bg-brand flex size-9 items-center justify-center rounded-xl text-sm font-bold text-white shadow-lg shadow-black/20 ring-1 ring-white/20">GC</span>
+          <span className="grid leading-tight">
+            <span className="text-sm font-semibold text-white">{t('app.name')}</span>
+            <span className="text-[11px] text-sidebar-muted">{t('app.tagline')}</span>
+          </span>
         </Link>
-        <Sidebar sections={sections} isAgent={isAgent} />
+        <Sidebar sections={sections} isAgent={isAgent} variant="dark" />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar name={session.profile.full_name || session.profile.email || ''} roleLabel={t(`team.role_${session.profile.role}`)} sections={sections} isAgent={isAgent} />
