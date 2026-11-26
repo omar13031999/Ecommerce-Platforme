@@ -9,7 +9,7 @@ import { formatDZD, formatDateTime, formatPercent, type AppLocale } from '@/lib/
 import { ProductDialog, ArchiveButton, PriceImportDialog, RecalculateDialog, SyncStockButton } from './products-client';
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ archived?: string }> }) {
-  const session = await requirePage('products.manage', 'finance.view');
+  const session = await requirePage('products.manage', 'products.create', 'finance.view');
   const { archived } = await searchParams;
   const t = await getTranslations();
   const locale = (await getLocale()) as AppLocale;
@@ -38,7 +38,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             <a href={archived === '1' ? '/products' : '/products?archived=1'} className="text-sm text-primary hover:underline">{archived === '1' ? t('common.back') : t('products.showArchived')}</a>
             {hasStock && session.can('products.manage') ? (stockProviders.data ?? []).map((pr) => <SyncStockButton key={pr.id} providerId={pr.id} label={pr.name} />) : null}
             {session.can('products.manage') || session.can('finance.manage') ? <PriceImportDialog canCost={session.can('finance.manage')} canProducts={session.can('products.manage')} /> : null}
-            {session.can('products.manage') ? <ProductDialog canCost={session.can('finance.manage')} /> : null}
+            {session.can('products.manage') || session.can('products.create') ? <ProductDialog canCost={session.can('finance.manage')} /> : null}
           </>
         }
       />
@@ -74,10 +74,10 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                     </>
                   ) : null}
                   <TD className="flex justify-end gap-1">
-                    <ProductDialog canCost={session.can('finance.manage')} canEdit={session.can('products.manage')} product={{
+                    {session.can('products.manage') || session.can('finance.manage') ? <ProductDialog canCost={session.can('finance.manage')} canEdit={session.can('products.manage')} product={{
                       id: p.id, name: p.name, sku: p.sku ?? '', description: p.description ?? '', selling_price: Number(p.selling_price),
                       purchase_cost: c?.purchase_cost ?? null, packaging_cost: c?.packaging_cost ?? null, storage_cost: c?.storage_cost ?? null,
-                    }} />
+                    }} /> : null}
                     {session.can('finance.manage') ? <RecalculateDialog productId={p.id} /> : null}
                     {session.can('products.manage') ? <ArchiveButton id={p.id} archived={p.is_archived} /> : null}
                   </TD>

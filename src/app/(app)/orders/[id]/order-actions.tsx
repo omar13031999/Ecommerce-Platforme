@@ -1,9 +1,11 @@
 'use client';
 import { CommuneSelect, type CommuneOption } from '@/components/app/commune-select';
+import { PostponeDialog } from '@/components/app/postpone-dialog';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Ban, Check, Copy, PhoneMissed, PhoneOff, Send } from 'lucide-react';
+import { Ban, Check, Copy, PhoneMissed, PhoneOff, Send, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +14,7 @@ import { useAction } from '@/components/app/use-action';
 import { CONFIRMATION_STATUSES, DELIVERY_STATUSES, nextNoAnswer, type ConfirmationStatus } from '@/lib/domain/statuses';
 import {
   addOrderNote, assignOrders, autoAssignOrders, changeConfirmationStatus, matchOrderItem, resolveReview,
-  setDeliveryManual, submitToDelivery, updateOrderCustomer,
+  deleteOrders, setDeliveryManual, submitToDelivery, updateOrderCustomer,
 } from '@/lib/actions/orders';
 
 export function StatusActions({ orderId, status, version, isManager, beforeChange, confirmBlockers }: {
@@ -51,6 +53,7 @@ export function StatusActions({ orderId, status, version, isManager, beforeChang
         <Button variant="success" disabled={pending || status === 'confirmed'} onClick={() => void apply('confirmed')}><Check />{t('orders.markConfirmed')}</Button>
         {next ? <Button variant="warning" disabled={pending} onClick={() => void apply(next)}><PhoneMissed />{t('orders.noAnswerNext')} ({next.slice(-1)})</Button> : null}
         <Button variant="outline" disabled={pending || status === 'unreachable'} onClick={() => void apply('unreachable')}><PhoneOff />{t('orders.markUnreachable')}</Button>
+        <PostponeDialog orderId={orderId} version={version} beforeChange={beforeChange} />
         <Button variant="outline" disabled={pending || status === 'duplicate'} onClick={() => void apply('duplicate')}><Copy />{t('orders.markDuplicate')}</Button>
         <Button variant="destructive" disabled={pending || status === 'cancelled'} onClick={() => void apply('cancelled')}><Ban />{t('orders.markCancelled')}</Button>
       </div>
@@ -59,7 +62,7 @@ export function StatusActions({ orderId, status, version, isManager, beforeChang
         <div className="flex gap-2">
           <Select value={manual} onChange={(e) => setManual(e.target.value)} className="max-w-xs" aria-label={t('orders.changeStatus')}>
             <option value="">{t('orders.changeStatus')}…</option>
-            {CONFIRMATION_STATUSES.map((s) => <option key={s} value={s}>{t(`confirmation.${s}`)}</option>)}
+            {CONFIRMATION_STATUSES.filter((s) => s !== 'postponed').map((s) => <option key={s} value={s}>{t(`confirmation.${s}`)}</option>)}
           </Select>
           <Button variant="outline" disabled={!manual || pending} onClick={() => void apply(manual as ConfirmationStatus)}>{t('common.apply')}</Button>
         </div>
@@ -210,5 +213,18 @@ export function ItemMatcher({ itemId, products }: { itemId: string; products: { 
       </Select>
       <Button size="sm" className="h-7" disabled={!productId || pending} onClick={() => run(() => matchOrderItem({ itemId, productId, remember: true }))}>OK</Button>
     </div>
+  );
+}
+
+/** Owner-only permanent deletion from the order page. */
+export function DeleteOrderButton({ orderId, reference }: { orderId: string; reference: number }) {
+  const t = useTranslations();
+  const { run, pending } = useAction();
+  const router = useRouter();
+  return (
+    <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" disabled={pending}
+      onClick={() => { if (confirm(t('orders.deleteOneConfirm', { reference }))) run(() => deleteOrders([orderId]), { success: t('orders.deleted', { count: 1 }), refresh: false, onSuccess: () => router.push('/orders') }); }}>
+      <Trash2 />{t('common.delete')}
+    </Button>
   );
 }

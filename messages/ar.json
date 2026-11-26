@@ -135,7 +135,8 @@
     "unreachable": "لا يمكن الوصول إليه",
     "cancelled": "ملغى",
     "duplicate": "مكرر",
-    "confirmed": "مؤكد"
+    "confirmed": "مؤكد",
+    "postponed": "مؤجلة"
   },
   "delivery": {
     "not_submitted": "لم يُرسل",
@@ -190,7 +191,10 @@
     "netProfit": "الربح الصافي",
     "expectedProfit": "الربح المتوقع",
     "realizedProfit": "الربح المحقق",
-    "potentialProfit": "الربح المحتمل"
+    "potentialProfit": "الربح المحتمل",
+    "myConfirmed": "طلبياتي المؤكدة (الفترة)",
+    "myReminders": "تذكيراتي (الطلبيات المؤجلة)",
+    "noReminders": "لا توجد تذكيرات"
   },
   "orders": {
     "title": "الطلبيات",
@@ -306,7 +310,21 @@
     "unsavedChanges": "تعديلات غير محفوظة",
     "completeBeforeConfirm": "أكمل قبل التأكيد: {fields}",
     "tabToProcess": "قيد المعالجة",
-    "tabTracking": "تتبّع الطرود"
+    "tabTracking": "تتبّع الطرود",
+    "postpone": "تأجيل",
+    "postponeHelp": "طلب الزبون الاتصال به لاحقاً. سيصلك إشعار في الوقت المحدد.",
+    "postponeAt": "الاتصال في",
+    "postponeIn1h": "بعد ساعة",
+    "postponeTonight": "الليلة 18:00",
+    "postponeTomorrow": "غداً 10:00",
+    "postponeIn2Days": "بعد غد 10:00",
+    "postponedUntil": "مؤجلة إلى {date}",
+    "callBackAt": "الاتصال في: {date}",
+    "tabConfirmed": "مؤكدة للإرسال",
+    "tabClosed": "ملغاة / مكررة",
+    "deleteConfirm": "حذف {count} طلبية نهائياً؟ سيُحذف السجل والمنتجات والتتبع. لا يمكن التراجع.",
+    "deleteOneConfirm": "حذف الطلبية #{reference} نهائياً؟ لا يمكن التراجع.",
+    "deleted": "تم حذف {count} طلبية"
   },
   "deliveryPage": {
     "title": "التوصيل",
@@ -624,7 +642,8 @@
     "ads_view": "عرض الإعلانات",
     "ads_manage": "إدارة الإعلانات",
     "integrations_manage": "إدارة التكاملات",
-    "settings_manage": "إدارة الإعدادات"
+    "settings_manage": "إدارة الإعدادات",
+    "products_create": "إضافة منتجات"
   },
   "settings": {
     "title": "الإعدادات",
@@ -751,7 +770,8 @@
     "order_needs_review": "الطلبية #{reference} للمراجعة ({status})",
     "unmatched_product": "منتجات مستوردة غير معروفة",
     "shipment_unknown": "إرسال للتوصيل بنتيجة غير مؤكدة: يلزم التحقق",
-    "sync_failed": "فشل المزامنة ({kind})"
+    "sync_failed": "فشل المزامنة ({kind})",
+    "postponed_due": "تذكير: حان موعد الاتصال بالطلبية #{reference} ({customer})"
   },
   "errors": {
     "unknown": "حدث خطأ غير متوقع.",
@@ -801,7 +821,8 @@
     "invalid_json": "JSON غير صالح",
     "provider_auth_sheet": "الجدول غير مشارك للعموم (عارض عبر الرابط).",
     "invalid_items": "منتجات غير صالحة: كل سطر يحتاج منتجاً وكمية ≥ 1 وسعراً.",
-    "product_not_found": "المنتج غير موجود أو مؤرشف."
+    "product_not_found": "المنتج غير موجود أو مؤرشف.",
+    "invalid_postpone_date": "تاريخ التأجيل غير صالح (في المستقبل، 6 أشهر كحد أقصى)."
   },
   "fields": {
     "customer_name": "اسم الزبون",

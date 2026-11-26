@@ -14,6 +14,7 @@ export const PERMISSIONS = [
   'delivery.view',
   'delivery.manage',
   'products.manage',
+  'products.create',
   'reports.operational',
   'finance.view',
   'finance.manage',
@@ -49,12 +50,16 @@ const MANAGER_DEFAULTS: readonly Permission[] = [
   'delivery.view',
   'delivery.manage',
   'reports.operational',
+  'products.create',
 ];
+
+/** Confirmers: follow their parcels and add products (never edit/delete, never costs). */
+const AGENT_DEFAULTS: readonly Permission[] = ['delivery.view', 'products.create'];
 
 export function roleDefaultPermissions(role: Role): readonly Permission[] {
   if (role === 'admin') return PERMISSIONS;
   if (role === 'manager') return MANAGER_DEFAULTS;
-  return [];
+  return AGENT_DEFAULTS;
 }
 
 export function effectivePermissions(role: Role, extra: readonly string[]): Set<Permission> {

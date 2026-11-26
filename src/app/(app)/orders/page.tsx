@@ -3,7 +3,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Plus } from 'lucide-react';
 import { requirePage } from '@/lib/auth/session';
 import { createClient } from '@/lib/supabase/server';
-import { applyOrderFilters, orderSelect, sortOf, TO_PROCESS_DELIVERY, type OrderSearchParams } from '@/lib/orders-query';
+import { applyOrderFilters, ORDER_VIEWS, orderSelect, sortOf, viewRule, type OrderSearchParams, type OrderView } from '@/lib/orders-query';
 import { cn } from '@/lib/utils';
 import { fromDbError } from '@/lib/errors';
 import { PageHeader } from '@/components/app/page-header';
@@ -32,14 +32,21 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const { data, count, error } = await query.order(col, { ascending }).order('id').range((page - 1) * size, page * size - 1);
   if (error) throw fromDbError(error);
 
-  const [toProcessRes, trackingRes] = await Promise.all([
-    supabase.from('orders').select('id', { count: 'exact', head: true }).in('delivery_status', TO_PROCESS_DELIVERY),
-    supabase.from('orders').select('id', { count: 'exact', head: true }).not('delivery_status', 'in', `(${TO_PROCESS_DELIVERY.join(',')})`),
-  ]);
-  const view = sp.view === 'tracking' ? 'tracking' : 'process';
+  // Tab counters (RLS applies: confirmers count only their own orders).
+  const counts = await Promise.all((['process', 'confirmed', 'tracking', 'closed'] as const).map(async (v) => {
+    const rule = viewRule(v);
+    let cq = supabase.from('orders').select('id', { count: 'exact', head: true });
+    if (rule.status) cq = cq.in('confirmation_status', rule.status);
+    if (rule.delivery) cq = cq.in('delivery_status', rule.delivery);
+    if (rule.notDelivery) cq = cq.not('delivery_status', 'in', `(${rule.notDelivery.join(',')})`);
+    return (await cq).count ?? 0;
+  }));
+  const view = ORDER_VIEWS.includes(sp.view as OrderView) ? (sp.view as OrderView) : sp.status || sp.delivery ? 'all' : 'process';
   const tabs = [
-    { key: 'process', href: '/orders', label: t('orders.tabToProcess'), count: toProcessRes.count ?? 0 },
-    { key: 'tracking', href: '/orders?view=tracking&sort=updated_at&dir=desc', label: t('orders.tabTracking'), count: trackingRes.count ?? 0 },
+    { key: 'process', href: '/orders', label: t('orders.tabToProcess'), count: counts[0]! },
+    { key: 'confirmed', href: '/orders?view=confirmed', label: t('orders.tabConfirmed'), count: counts[1]! },
+    { key: 'tracking', href: '/orders?view=tracking&sort=updated_at&dir=desc', label: t('orders.tabTracking'), count: counts[2]! },
+    { key: 'closed', href: '/orders?view=closed&sort=updated_at&dir=desc', label: t('orders.tabClosed'), count: counts[3]! },
   ];
 
   const canAssign = session.can('orders.assign');
@@ -87,6 +94,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           sort={{ col, dir: ascending ? 'asc' : 'desc' }}
           currentUserId={session.userId}
           isManager={session.can('orders.manage')}
+          canDelete={session.profile.role === 'admin'}
         />
       </Card>
       <Pagination page={page} pageSize={size} total={count ?? 0} searchParams={sp as Record<string, string | undefined>} />

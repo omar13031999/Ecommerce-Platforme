@@ -135,7 +135,8 @@
     "unreachable": "Injoignable",
     "cancelled": "Annulé",
     "duplicate": "Doublé",
-    "confirmed": "Confirmé"
+    "confirmed": "Confirmé",
+    "postponed": "Reporté"
   },
   "delivery": {
     "not_submitted": "Non envoyée",
@@ -190,7 +191,10 @@
     "netProfit": "Bénéfice net",
     "expectedProfit": "Bénéfice attendu",
     "realizedProfit": "Bénéfice réalisé",
-    "potentialProfit": "Bénéfice potentiel"
+    "potentialProfit": "Bénéfice potentiel",
+    "myConfirmed": "Mes commandes confirmées (période)",
+    "myReminders": "Mes rappels (commandes reportées)",
+    "noReminders": "Aucun rappel prévu"
   },
   "orders": {
     "title": "Commandes",
@@ -306,7 +310,21 @@
     "unsavedChanges": "Modifications non enregistrées",
     "completeBeforeConfirm": "Complétez avant de confirmer : {fields}",
     "tabToProcess": "À traiter",
-    "tabTracking": "Suivi des colis"
+    "tabTracking": "Suivi des colis",
+    "postpone": "Reporter",
+    "postponeHelp": "Le client demande d'être rappelé plus tard. Une notification sera envoyée à l'heure choisie.",
+    "postponeAt": "Rappeler le",
+    "postponeIn1h": "Dans 1 h",
+    "postponeTonight": "Ce soir 18 h",
+    "postponeTomorrow": "Demain 10 h",
+    "postponeIn2Days": "Après-demain 10 h",
+    "postponedUntil": "Reporté jusqu’au {date}",
+    "callBackAt": "À rappeler : {date}",
+    "tabConfirmed": "Confirmées à envoyer",
+    "tabClosed": "Annulées / doublons",
+    "deleteConfirm": "Supprimer définitivement {count} commande(s) ? Historique, produits et suivi seront effacés. Action irréversible.",
+    "deleteOneConfirm": "Supprimer définitivement la commande #{reference} ? Action irréversible.",
+    "deleted": "{count} commande(s) supprimée(s)"
   },
   "deliveryPage": {
     "title": "Livraison",
@@ -624,7 +642,8 @@
     "ads_view": "Voir la publicité",
     "ads_manage": "Gérer la publicité",
     "integrations_manage": "Gérer les intégrations",
-    "settings_manage": "Gérer les paramètres"
+    "settings_manage": "Gérer les paramètres",
+    "products_create": "Ajouter des produits"
   },
   "settings": {
     "title": "Paramètres",
@@ -751,7 +770,8 @@
     "order_needs_review": "Commande #{reference} à revoir ({status})",
     "unmatched_product": "Produits importés non reconnus",
     "shipment_unknown": "Envoi en livraison au résultat incertain : vérification nécessaire",
-    "sync_failed": "Échec de synchronisation ({kind})"
+    "sync_failed": "Échec de synchronisation ({kind})",
+    "postponed_due": "Rappel : commande #{reference} ({customer}) à rappeler maintenant"
   },
   "errors": {
     "unknown": "Une erreur inattendue est survenue.",
@@ -801,7 +821,8 @@
     "invalid_json": "JSON invalide",
     "provider_auth_sheet": "La feuille n’est pas partagée publiquement (lecteur avec le lien).",
     "invalid_items": "Produits invalides : chaque ligne doit avoir un produit, une quantité ≥ 1 et un prix.",
-    "product_not_found": "Produit introuvable ou archivé."
+    "product_not_found": "Produit introuvable ou archivé.",
+    "invalid_postpone_date": "Date de rappel invalide (dans le futur, 6 mois maximum)."
   },
   "fields": {
     "customer_name": "nom du client",

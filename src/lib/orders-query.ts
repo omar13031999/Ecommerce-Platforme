@@ -1,6 +1,6 @@
 import { escapeFilter } from '@/lib/utils';
 import { resolveRange, rangeToInstants, type DateRange } from '@/lib/dates';
-import { IN_TRANSIT_STATUSES, isConfirmationStatus, isDeliveryStatus } from '@/lib/domain/statuses';
+import { CLOSED_STATUSES, IN_TRANSIT_STATUSES, TO_PROCESS_STATUSES, isConfirmationStatus, isDeliveryStatus } from '@/lib/domain/statuses';
 
 export type OrderSearchParams = {
   q?: string; status?: string; delivery?: string; agent?: string; wilaya?: string; product?: string;
@@ -13,6 +13,25 @@ export type OrderSearchParams = {
 export const SORTABLE = ['ordered_at', 'reference', 'total_amount', 'confirmation_status', 'delivery_status', 'updated_at'] as const;
 /** Orders still handled by the confirmation team (not yet with a delivery company). */
 export const TO_PROCESS_DELIVERY = ['not_submitted', 'submission_failed', 'pending_submission'];
+/**
+ * List tabs:
+ *  process   — still worked by confirmers: new, no answer, unreachable, postponed (not sent)
+ *  confirmed — confirmed, waiting to be sent to the delivery company
+ *  tracking  — handed to a delivery company
+ *  closed    — cancelled / duplicates (out of the working list)
+ *  all       — no restriction
+ */
+export const ORDER_VIEWS = ['process', 'confirmed', 'tracking', 'closed', 'all'] as const;
+export type OrderView = (typeof ORDER_VIEWS)[number];
+export function viewRule(view: OrderView): { status?: string[]; delivery?: string[]; notDelivery?: string[] } {
+  switch (view) {
+    case 'process': return { status: [...TO_PROCESS_STATUSES], delivery: TO_PROCESS_DELIVERY };
+    case 'confirmed': return { status: ['confirmed'], delivery: TO_PROCESS_DELIVERY };
+    case 'tracking': return { notDelivery: TO_PROCESS_DELIVERY };
+    case 'closed': return { status: [...CLOSED_STATUSES] };
+    default: return {};
+  }
+}
 const NO_ANSWER = ['no_answer_1', 'no_answer_2', 'no_answer_3', 'no_answer_4', 'no_answer_5', 'no_answer_6', 'no_answer_7', 'no_answer_8', 'no_answer_9'];
 
 /** Applies list filters to a PostgREST query builder (RLS still applies). */
@@ -38,9 +57,13 @@ export function applyOrderFilters<Q extends { [k: string]: any }>(query: Q, sp: 
     else if (sp.status === 'no_answer') q = q.in('confirmation_status', NO_ANSWER);
     else if (isConfirmationStatus(sp.status)) q = q.eq('confirmation_status', sp.status);
   }
-  // Split between "to process" and "tracking" (sent orders leave the main list).
-  if (sp.view === 'tracking') q = q.not('delivery_status', 'in', `(${TO_PROCESS_DELIVERY.join(',')})`);
-  else if (sp.view !== 'all' && !sp.delivery) q = q.in('delivery_status', TO_PROCESS_DELIVERY);
+  // Tabs: an explicit status / delivery filter replaces that part of the tab's rule.
+  // Without an explicit tab, a status/delivery filter (dashboard links…) searches every order.
+  const view = ORDER_VIEWS.includes(sp.view as OrderView) ? (sp.view as OrderView) : sp.status || sp.delivery ? 'all' : 'process';
+  const rule = viewRule(view);
+  if (rule.status && !sp.status) q = q.in('confirmation_status', rule.status);
+  if (rule.delivery && !sp.delivery) q = q.in('delivery_status', rule.delivery);
+  if (rule.notDelivery && !sp.delivery) q = q.not('delivery_status', 'in', `(${rule.notDelivery.join(',')})`);
   if (sp.delivery) {
     if (sp.delivery === 'in_transit') q = q.in('delivery_status', IN_TRANSIT_STATUSES as string[]);
     else if (sp.delivery === 'not_submitted') q = q.in('delivery_status', ['not_submitted', 'submission_failed']);
@@ -59,7 +82,7 @@ export function applyOrderFilters<Q extends { [k: string]: any }>(query: Q, sp: 
 export function orderSelect(sp: OrderSearchParams) {
   const base =
     'id, reference, external_id, source, customer_name, phone, wilaya_code, commune, total_amount, confirmation_status, delivery_status, ' +
-    'assigned_to, ordered_at, updated_at, version, tracking_number, needs_review, has_unmatched_items, possible_duplicate_of, contact_attempts, ' +
+    'assigned_to, ordered_at, updated_at, version, postponed_until, tracking_number, needs_review, has_unmatched_items, possible_duplicate_of, contact_attempts, ' +
     'order_items(product_name, quantity)';
   return sp.product ? `${base}, filter_items:order_items!inner(product_id)` : base;
 }

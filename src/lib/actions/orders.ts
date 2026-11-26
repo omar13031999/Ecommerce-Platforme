@@ -181,3 +181,30 @@ export async function matchOrderItem(input: { itemId: string; productId: string;
     if (error) throw fromDbError(error);
   });
 }
+
+/** Postpone: the customer asked to be called back at a given date/time (notification when due). */
+export async function postponeOrder(input: { orderId: string; until: string; note?: string; version?: number }) {
+  return runAction(async () => {
+    await requireUser();
+    const p = z.object({ orderId: uuid, until: z.string().datetime({ offset: true }), note, version: z.number().int().optional() }).parse(input);
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc('postpone_order', {
+      p_order_id: p.orderId, p_until: p.until, p_note: p.note ?? null, p_expected_version: p.version ?? null,
+    });
+    if (error) throw fromDbError(error);
+    return data as { version: number; postponed_until: string };
+  });
+}
+
+/** Permanent deletion — owner (admin role) only; also enforced in the database. */
+export async function deleteOrders(orderIds: string[]) {
+  return runAction(async () => {
+    const s = await requireUser();
+    if (s.profile.role !== 'admin') throw new AppError('forbidden', 403);
+    const ids = z.array(uuid).min(1).max(500).parse(orderIds);
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc('delete_orders', { p_order_ids: ids });
+    if (error) throw fromDbError(error);
+    return data as number;
+  });
+}

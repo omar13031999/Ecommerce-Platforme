@@ -3,6 +3,7 @@ export const CONFIRMATION_STATUSES = [
   'no_answer_1', 'no_answer_2', 'no_answer_3', 'no_answer_4', 'no_answer_5',
   'no_answer_6', 'no_answer_7', 'no_answer_8', 'no_answer_9',
   'unreachable',
+  'postponed',
   'cancelled',
   'duplicate',
   'confirmed',
@@ -38,6 +39,14 @@ export function naLevel(s: ConfirmationStatus): number {
 }
 
 /** Next "no answer" status for the one-click "Pas de réponse" button. */
+/** Statuses still worked by the confirmation team ("À traiter" tab). */
+export const TO_PROCESS_STATUSES: readonly ConfirmationStatus[] = [
+  'new', 'no_answer_1', 'no_answer_2', 'no_answer_3', 'no_answer_4', 'no_answer_5',
+  'no_answer_6', 'no_answer_7', 'no_answer_8', 'no_answer_9', 'unreachable', 'postponed',
+];
+/** Closed without delivery ("Annulées" tab). */
+export const CLOSED_STATUSES: readonly ConfirmationStatus[] = ['cancelled', 'duplicate'];
+
 export function nextNoAnswer(s: ConfirmationStatus): ConfirmationStatus | null {
   const lvl = naLevel(s);
   if (lvl >= 9) return null;
@@ -59,6 +68,7 @@ export function confirmationTone(s: ConfirmationStatus): Tone {
   if (s === 'cancelled') return 'red';
   if (s === 'duplicate') return 'zinc';
   if (s === 'unreachable') return 'purple';
+  if (s === 'postponed') return 'cyan';
   const lvl = naLevel(s);
   return lvl >= 7 ? 'rose' : lvl >= 4 ? 'orange' : 'amber';
 }

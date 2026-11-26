@@ -4,7 +4,7 @@ import {
   AlertTriangle, CheckCircle2, Clock, Copy, PackageCheck, PhoneOff, RotateCcw, ShoppingBag, Truck, UserX, XCircle,
 } from 'lucide-react';
 import { requirePage } from '@/lib/auth/session';
-import { resolveRange } from '@/lib/dates';
+import { rangeToInstants, resolveRange } from '@/lib/dates';
 import { rpc, type FinancialSummary, type OperationalDashboard } from '@/lib/queries';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/app/page-header';
@@ -15,7 +15,7 @@ import { chartColor } from '@/lib/chart-colors';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { ConfirmationBadge } from '@/components/app/status-badge';
-import { formatDZD, formatNumber, formatPercent, type AppLocale } from '@/lib/format';
+import { formatDZD, formatDateTime, formatNumber, formatPercent, type AppLocale } from '@/lib/format';
 import type { ConfirmationStatus } from '@/lib/domain/statuses';
 
 type SP = Promise<{ range?: string; from?: string; to?: string; denied?: string }>;
@@ -43,7 +43,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
         actions={<DateRangeFilter range={range} />}
       />
 
-      {isAgent ? <AgentPanel userId={session.userId} capacity={session.profile.max_active_orders} /> : null}
+      {isAgent ? <AgentPanel userId={session.userId} capacity={session.profile.max_active_orders} range={range} locale={locale} /> : null}
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
         <StatCard label={t('dashboard.totalOrders')} value={formatNumber(c.total, locale)} icon={<ShoppingBag />} href={q('')} />
@@ -102,18 +102,41 @@ export default async function DashboardPage({ searchParams }: { searchParams: SP
   );
 }
 
-async function AgentPanel({ userId, capacity }: { userId: string; capacity: number }) {
+async function AgentPanel({ userId, capacity, range, locale }: { userId: string; capacity: number; range: { from: string; to: string }; locale: AppLocale }) {
   const t = await getTranslations();
   const supabase = await createClient();
   const { data: workload } = await supabase.rpc('workload_statuses');
   const statuses = (workload ?? ['new']) as string[];
-  const [{ count: active }, { data: followUps }] = await Promise.all([
+  const { start, end } = rangeToInstants(range);
+  const [{ count: active }, { data: followUps }, { count: myConfirmed }, { data: reminders }] = await Promise.all([
     supabase.from('orders').select('id', { count: 'exact', head: true }).eq('assigned_to', userId).in('confirmation_status', statuses).in('delivery_status', ['not_submitted', 'submission_failed']),
     supabase.from('orders').select('id, reference, customer_name, phone, confirmation_status, updated_at')
       .eq('assigned_to', userId).in('confirmation_status', statuses).order('confirmation_status').order('updated_at').limit(8),
+    supabase.from('orders').select('id', { count: 'exact', head: true }).eq('assigned_to', userId).eq('confirmation_status', 'confirmed').gte('confirmed_at', start).lt('confirmed_at', end),
+    supabase.from('orders').select('id, reference, customer_name, postponed_until').eq('assigned_to', userId).eq('confirmation_status', 'postponed')
+      .in('delivery_status', ['not_submitted', 'submission_failed']).order('postponed_until', { ascending: true }).limit(6),
   ]);
   const pct = capacity ? Math.min(100, Math.round(((active ?? 0) / capacity) * 100)) : 0;
   return (
+    <div className="grid gap-4">
+    <div className="grid gap-4 sm:grid-cols-2">
+      <StatCard label={t('dashboard.myConfirmed')} value={formatNumber(myConfirmed ?? 0, locale)} icon={<CheckCircle2 />} tone="positive" href="/orders?view=confirmed" />
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Clock className="size-4 text-primary" />{t('dashboard.myReminders')}</CardTitle></CardHeader>
+        <CardContent className="grid gap-1.5 text-sm">
+          {(reminders ?? []).map((r) => {
+            const late = r.postponed_until && Date.parse(r.postponed_until) <= Date.now();
+            return (
+              <Link key={r.id} href={`/orders/${r.id}`} className="flex items-center justify-between gap-2 rounded-md px-2 py-1 hover:bg-muted">
+                <span><span className="font-medium text-primary">#{r.reference}</span> {r.customer_name}</span>
+                <span className={late ? 'text-xs font-medium text-destructive' : 'text-xs text-muted-foreground'}>{late ? '⏰ ' : ''}{r.postponed_until ? formatDateTime(r.postponed_until, locale) : '—'}</span>
+              </Link>
+            );
+          })}
+          {!reminders?.length ? <p className="text-muted-foreground">{t('dashboard.noReminders')}</p> : null}
+        </CardContent>
+      </Card>
+    </div>
     <div className="grid gap-4 lg:grid-cols-3">
       <Card>
         <CardHeader><CardTitle>{t('dashboard.myWorkload')}</CardTitle></CardHeader>
@@ -143,6 +166,7 @@ async function AgentPanel({ userId, capacity }: { userId: string; capacity: numb
           </Table>
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 }

@@ -48,6 +48,13 @@ export async function runScheduledJobs(only?: string[]): Promise<JobResult[]> {
       return { assigned: assigned.data, redistributed: redistributed.data };
     }));
   }
+  if (want('postponed')) {
+    results.push(await withLease('postponed', 120, async () => {
+      const { data, error } = await db.rpc('notify_due_postponed', { p_limit: 200 });
+      if (error) throw error;
+      return { notified: data };
+    }));
+  }
   if (want('sheets')) {
     results.push(await withLease('sheets', 600, async () => settled(await dueSheetSources(), (id) => syncSheetSource(id, 'schedule'))));
   }

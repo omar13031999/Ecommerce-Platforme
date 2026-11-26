@@ -11,7 +11,7 @@ export const NAV: NavSection[] = [
       { href: '/dashboard', key: 'dashboard', icon: 'LayoutDashboard' },
       { href: '/orders', key: 'orders', icon: 'ShoppingBag' },
       { href: '/delivery', key: 'delivery', icon: 'Truck', any: ['delivery.view'] },
-      { href: '/products', key: 'products', icon: 'Package', any: ['products.manage', 'finance.view'] },
+      { href: '/products', key: 'products', icon: 'Package', any: ['products.manage', 'products.create', 'finance.view'] },
       { href: '/products/matching', key: 'matching', icon: 'GitMerge', any: ['products.manage', 'orders.manage'] },
       { href: '/analytics', key: 'analytics', icon: 'BarChart3', any: ['reports.operational', 'finance.view'] },
     ],

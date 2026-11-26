@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowDown, ArrowUp, Columns3, Copy, PackageX, PhoneMissed, Send, UserMinus, UserPlus, Wand2 } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Columns3, Copy, PackageX, PhoneMissed, Send, Trash2, UserMinus, UserPlus, Wand2 } from 'lucide-react';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { Checkbox, Select } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,16 +12,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ConfirmationBadge, DeliveryBadge } from '@/components/app/status-badge';
 import { useAction } from '@/components/app/use-action';
+import { PostponeDialog } from '@/components/app/postpone-dialog';
 import { formatDZD, formatDateTime, type AppLocale } from '@/lib/format';
 import { CONFIRMATION_STATUSES, nextNoAnswer, type ConfirmationStatus, type DeliveryStatus } from '@/lib/domain/statuses';
-import { assignOrders, autoAssignOrders, changeConfirmationStatus, submitToDelivery, unassignOrders } from '@/lib/actions/orders';
+import { assignOrders, autoAssignOrders, changeConfirmationStatus, deleteOrders, submitToDelivery, unassignOrders } from '@/lib/actions/orders';
 
 export type OrderRow = {
   id: string; reference: number; external_id: string | null; source: string; customer_name: string; phone: string;
   wilaya_code: number | null; commune: string | null; total_amount: number; confirmation_status: ConfirmationStatus;
   delivery_status: DeliveryStatus; assigned_to: string | null; ordered_at: string; tracking_number: string | null;
   needs_review: boolean; has_unmatched_items: boolean; possible_duplicate_of: string | null; contact_attempts: number;
-  version: number; order_items: { product_name: string; quantity: number }[];
+  version: number; postponed_until: string | null; order_items: { product_name: string; quantity: number }[];
 };
 
 const COLUMNS = ['reference', 'date', 'customer', 'phone', 'wilaya', 'products', 'total', 'confirmation', 'delivery', 'agent', 'tracking'] as const;
@@ -29,11 +30,11 @@ type Col = (typeof COLUMNS)[number];
 const STORAGE_KEY = 'orders.columns.v1';
 
 export function OrdersTable({
-  rows, agentNames, agents, providers, canAssign, canSubmit, showAgent, sort, currentUserId, isManager,
+  rows, agentNames, agents, providers, canAssign, canSubmit, showAgent, sort, currentUserId, isManager, canDelete = false,
 }: {
   rows: OrderRow[]; agentNames: Record<string, string>; agents: { id: string; full_name: string }[];
   providers: { id: string; name: string; code: string }[]; canAssign: boolean; canSubmit: boolean; showAgent: boolean;
-  sort: { col: string; dir: 'asc' | 'desc' }; currentUserId: string; isManager: boolean;
+  sort: { col: string; dir: 'asc' | 'desc' }; currentUserId: string; isManager: boolean; canDelete?: boolean;
 }) {
   const t = useTranslations();
   const locale = useLocale() as AppLocale;
@@ -63,7 +64,7 @@ export function OrdersTable({
   const visible = useMemo(() => COLUMNS.filter((c) => !hidden.has(c) && (c !== 'agent' || showAgent)), [hidden, showAgent]);
   const ids = [...selected];
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
-  const bulk = canAssign || canSubmit;
+  const bulk = canAssign || canSubmit || canDelete;
 
   const sortHref = (col: string) => {
     const sp = new URLSearchParams(params.toString());
@@ -114,6 +115,9 @@ export function OrdersTable({
       case 'products': return <span className="line-clamp-2 max-w-[220px] text-xs">{r.order_items.map((i) => `${i.product_name} ×${i.quantity}`).join(', ')}</span>;
       case 'total': return <span className="tabular whitespace-nowrap">{formatDZD(r.total_amount, locale)}</span>;
       case 'confirmation':
+        if (r.confirmation_status === 'postponed' && !((isManager || r.assigned_to === currentUserId) && ['not_submitted', 'submission_failed'].includes(r.delivery_status)) && r.postponed_until) {
+          return <div className="grid gap-0.5"><ConfirmationBadge status={r.confirmation_status} /><PostponedLabel due={new Date(r.postponed_until)} /></div>;
+        }
         return (isManager || r.assigned_to === currentUserId) && ['not_submitted', 'submission_failed'].includes(r.delivery_status)
           ? <QuickStatus row={r} isManager={isManager} />
           : <ConfirmationBadge status={r.confirmation_status} />;
@@ -158,6 +162,12 @@ export function OrdersTable({
                   <Send />{t('orders.submitDelivery')}
                 </Button>
               </>
+            ) : null}
+            {canDelete ? (
+              <Button size="sm" variant="destructive" disabled={pending}
+                onClick={() => { if (confirm(t('orders.deleteConfirm', { count: ids.length }))) run(() => deleteOrders(ids), { success: (n) => t('orders.deleted', { count: Number(n) }) }); }}>
+                <Trash2 />{t('common.delete')}
+              </Button>
             ) : null}
           </>
         ) : <span className="text-sm text-muted-foreground">{rows.length ? '' : t('common.noResults')}</span>}
@@ -215,14 +225,17 @@ function QuickStatus({ row, isManager }: { row: OrderRow; isManager: boolean }) 
   const t = useTranslations();
   const { run, pending } = useAction();
   const next = nextNoAnswer(row.confirmation_status);
-  const choices = isManager
-    ? CONFIRMATION_STATUSES
-    : [...new Set<ConfirmationStatus>([row.confirmation_status, ...(next ? [next] : []), ...AGENT_CHOICES])];
+  const choices = (isManager
+    ? [...CONFIRMATION_STATUSES]
+    : [...new Set<ConfirmationStatus>([row.confirmation_status, ...(next ? [next] : []), ...AGENT_CHOICES])])
+    .filter((s) => s !== 'postponed' || s === row.confirmation_status);
   const apply = (status: ConfirmationStatus) => {
     if (status === row.confirmation_status) return;
     run(() => changeConfirmationStatus({ orderId: row.id, status, version: row.version }), { success: `#${row.reference} → ${t(`confirmation.${status}`)}` });
   };
+  const due = row.confirmation_status === 'postponed' && row.postponed_until ? new Date(row.postponed_until) : null;
   return (
+    <div className="grid gap-0.5">
     <div className="flex items-center gap-1">
       <Select className="h-8 w-40 text-xs" value={row.confirmation_status} disabled={pending} aria-label={t('orders.changeStatus')}
         onChange={(e) => apply(e.target.value as ConfirmationStatus)}>
@@ -232,6 +245,20 @@ function QuickStatus({ row, isManager }: { row: OrderRow; isManager: boolean }) 
         <Button size="icon" variant="warning" className="size-8 shrink-0" disabled={pending} title={`${t('orders.noAnswerNext')} (${next.slice(-1)})`} aria-label={t('orders.noAnswerNext')}
           onClick={() => apply(next)}><PhoneMissed /></Button>
       ) : null}
+      <PostponeDialog orderId={row.id} version={row.version} iconOnly />
     </div>
+    {due ? <PostponedLabel due={due} /> : null}
+    </div>
+  );
+}
+
+function PostponedLabel({ due }: { due: Date }) {
+  const t = useTranslations('orders');
+  const locale = useLocale() as AppLocale;
+  const late = due.getTime() <= Date.now();
+  return (
+    <span className={late ? 'text-xs font-medium text-destructive' : 'text-xs text-muted-foreground'}>
+      {late ? '⏰ ' : ''}{t('callBackAt', { date: formatDateTime(due.toISOString(), locale) })}
+    </span>
   );
 }

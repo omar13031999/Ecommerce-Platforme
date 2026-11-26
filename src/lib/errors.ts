@@ -22,7 +22,7 @@ const KNOWN_DB_CODES = new Set([
   'order_not_found', 'not_assigned', 'stale_version', 'order_in_delivery', 'invalid_transition',
   'capacity_exceeded', 'agent_unavailable', 'unknown_permission', 'last_admin', 'cannot_modify_self',
   'user_not_found', 'order_not_confirmed', 'order_already_submitted', 'submission_in_progress',
-  'missing_items', 'missing_external_id', 'item_not_found', 'note_too_long', 'invalid_items', 'product_not_found',
+  'missing_items', 'missing_external_id', 'item_not_found', 'note_too_long', 'invalid_items', 'product_not_found', 'invalid_postpone_date', 'invalid_input',
 ]);
 
 type PgLikeError = { code?: string; message?: string; details?: string; hint?: string };

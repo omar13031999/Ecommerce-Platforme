@@ -19,11 +19,13 @@ const productSchema = z.object({
 /** Product fields need products.manage; cost fields additionally need finance.manage (also enforced by RLS). */
 export async function saveProduct(input: z.input<typeof productSchema>) {
   return runAction(async () => {
-    const session = await requireUser('products.manage', 'finance.manage');
+    const session = await requireUser('products.manage', 'products.create', 'finance.manage');
     const p = productSchema.parse(input);
     const supabase = await createClient();
     let id = p.id;
-    if (session.can('products.manage')) {
+    // products.create (confirmers) may only add new products, never edit existing ones.
+    if (p.id && !session.can('products.manage') && !session.can('finance.manage')) throw new AppError('forbidden', 403);
+    if (session.can('products.manage') || (!p.id && session.can('products.create'))) {
       const row = { name: p.name, sku: p.sku || null, description: p.description || null, selling_price: p.selling_price };
       const res = id
         ? await supabase.from('products').update(row).eq('id', id).select('id').single()
