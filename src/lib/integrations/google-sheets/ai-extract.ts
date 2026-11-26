@@ -1,6 +1,7 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 
 /**
@@ -11,12 +12,40 @@ import { z } from 'zod';
  * never invented — and listed in `missing` so the confirmers complete them.
  */
 
-const MODEL = 'claude-opus-5-5';
 const ROWS_PER_REQUEST = 15;
+const GATEWAY_URL = 'https://ai-gateway.vercel.sh';
+/** Default model through Vercel AI Gateway (no key needed on Vercel; cheapest Claude with structured output). */
+const GATEWAY_DEFAULT_MODEL = 'anthropic/claude-haiku-5.5';
+/** Default model with a direct Anthropic API key. */
+const DIRECT_DEFAULT_MODEL = 'claude-opus-5-5';
 
+const directKey = () => (/^sk-ant-/.test(process.env.ANTHROPIC_API_KEY?.trim() ?? '') ? process.env.ANTHROPIC_API_KEY!.trim() : null);
+
+/**
+ * Two ways to reach the model:
+ *  - direct Anthropic API, when ANTHROPIC_API_KEY holds a real key (sk-ant-…);
+ *  - otherwise Vercel AI Gateway, authenticated with the deployment's OIDC token
+ *    (automatic on Vercel, draws on the team's AI Gateway credits) or AI_GATEWAY_API_KEY.
+ * AI_EXTRACT_MODEL overrides the model (gateway ids look like "anthropic/claude-haiku-5.5").
+ */
 export function aiExtractionAvailable(): boolean {
-  // Anthropic API keys start with "sk-ant-"; a placeholder value means "not configured yet".
-  return /^sk-ant-/.test(process.env.ANTHROPIC_API_KEY?.trim() ?? '');
+  return Boolean(directKey() || process.env.AI_GATEWAY_API_KEY?.trim() || process.env.VERCEL === '1');
+}
+
+async function aiClient(): Promise<{ client: Anthropic; model: string; direct: boolean } | null> {
+  const key = directKey();
+  if (key) return { client: new Anthropic({ apiKey: key }), model: process.env.AI_EXTRACT_MODEL?.trim() || DIRECT_DEFAULT_MODEL, direct: true };
+  let token = process.env.AI_GATEWAY_API_KEY?.trim() || null;
+  if (!token) {
+    try {
+      const { getVercelOidcToken } = await import('@vercel/oidc');
+      token = (await getVercelOidcToken()) || null;
+    } catch {
+      token = null;
+    }
+  }
+  if (!token) return null;
+  return { client: new Anthropic({ apiKey: token, baseURL: GATEWAY_URL }), model: process.env.AI_EXTRACT_MODEL?.trim() || GATEWAY_DEFAULT_MODEL, direct: false };
 }
 
 const ExtractedRow = z.object({
@@ -72,10 +101,11 @@ export async function extractRowsWithAI(
   rows: { row: number; cells: Record<string, string> }[],
   catalog: { name: string; sku: string | null }[],
 ): Promise<{ results: Map<number, AiExtractedRow>; errors: string[] }> {
-  const client = new Anthropic();
   const results = new Map<number, AiExtractedRow>();
   const errors: string[] = [];
-  const system: Anthropic.Beta.BetaTextBlockParam[] = [
+  const ai = await aiClient();
+  if (!ai) return { results, errors: ['ai_not_configured'] };
+  const system: Anthropic.TextBlockParam[] = [
     { type: 'text', text: SYSTEM },
     // Stable prefix (instructions + catalogue) is cached across batches and syncs.
     { type: 'text', text: catalogBlock(catalog), cache_control: { type: 'ephemeral' } },
@@ -85,15 +115,17 @@ export async function extractRowsWithAI(
     const batch = rows.slice(i, i + ROWS_PER_REQUEST);
     const input = batch.map((r) => ({ row: r.row, cells: Object.fromEntries(Object.entries(r.cells).filter(([, v]) => String(v ?? '').trim())) }));
     try {
-      const response = await client.beta.messages.parse({
-        model: MODEL,
-        max_tokens: 16000,
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
-        system,
-        output_config: { effort: 'low', format: betaZodOutputFormat(ExtractionResult) },
-        messages: [{ role: 'user', content: `Extract these ${input.length} rows:\n${JSON.stringify(input)}` }],
-      });
+      const messages: Anthropic.MessageParam[] = [{ role: 'user', content: `Extract these ${input.length} rows:\n${JSON.stringify(input)}` }];
+      const response = ai.direct
+        // Direct API: server-side refusal fallback (AI Gateway has its own provider failover).
+        ? await ai.client.beta.messages.parse({
+          model: ai.model, max_tokens: 16000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', system,
+          output_config: { effort: 'low', format: betaZodOutputFormat(ExtractionResult) }, messages,
+        })
+        : await ai.client.messages.parse({
+          model: ai.model, max_tokens: 16000, system,
+          output_config: { effort: 'low', format: zodOutputFormat(ExtractionResult) }, messages,
+        });
       if (response.stop_reason === 'refusal') {
         errors.push(`refusal rows ${batch[0]!.row}-${batch[batch.length - 1]!.row}`);
         continue;
@@ -103,6 +135,10 @@ export async function extractRowsWithAI(
     } catch (e) {
       if (e instanceof Anthropic.AuthenticationError) {
         errors.push('ai_invalid_api_key');
+        break;
+      }
+      if (e instanceof Anthropic.APIError && (e.status === 402 || /credit|verification|budget/i.test(e.message))) {
+        errors.push(`ai_gateway_credits: ${e.message}`.slice(0, 200)); // no free credits unlocked / exhausted
         break;
       }
       if (e instanceof Anthropic.RateLimitError) {

@@ -43,14 +43,19 @@ allocate the remaining spend.
 For sheets whose columns are inconsistent (phone in the name column, "wilaya - commune" in one cell, product and
 price in free text), enable **Extraction intelligente par IA** in the source options.
 
-* Each **new** row is sent whole (headers + values) to the Claude API (`claude-opus-5-5`, low effort, structured
-  JSON output, server-side refusal fallback), in batches of 15 rows, at most 60 rows per sync — the rest is read on
-  the next sync. Rows already imported are never re-sent (no repeated cost; confirmers own them).
+* Each **new** row is sent whole (headers + values) to the model, in batches of 15 rows, at most 60 rows per sync —
+  the rest is read on the next sync. Rows already imported are never re-sent (no repeated cost; confirmers own them).
+* **Model access**, in this order:
+  1. `ANTHROPIC_API_KEY` holds a real key (`sk-ant-…`): direct Claude API, `claude-opus-5-5`, low effort,
+     server-side refusal fallback.
+  2. Otherwise **Vercel AI Gateway** (`https://ai-gateway.vercel.sh`, Anthropic-compatible Messages API) authenticated
+     with the deployment's OIDC token (automatic on Vercel, no key) or `AI_GATEWAY_API_KEY`. Default model
+     `anthropic/claude-haiku-5.5` ($0.10 / $0.50 per million tokens at the time of writing) — this draws on the team's
+     AI Gateway credits; the free monthly credits require a payment method on the Vercel team.
+  `AI_EXTRACT_MODEL` overrides the model (e.g. a `$0` model listed with the `free` tag on `/v1/models`).
 * The product catalogue (reference | name) is sent with the instructions (prompt-cached) so products are mapped to
   catalogue references when they clearly match.
 * Nothing is invented: absent values are null, the order is flagged *à vérifier* with the missing fields and the
   original row text.
-* If the AI is unavailable (no key, invalid key, rate limit, error) the row falls back to the column mapping, or is
+* If the AI is unavailable (no credits, invalid key, rate limit, error) the row falls back to the column mapping, or is
   imported raw for manual completion — an import never blocks.
-* Requires `ANTHROPIC_API_KEY` (starts with `sk-ant-`) in the server environment. Cost is roughly a few tenths of a
-  dinar to ~1 DA per order at current Claude API prices, depending on row length.

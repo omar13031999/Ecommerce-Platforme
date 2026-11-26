@@ -73,3 +73,36 @@ describe('AI availability', () => {
     expect(aiExtractionAvailable()).toBe(true);
   });
 });
+
+describe('AI extraction through Vercel AI Gateway', () => {
+  it('uses the gateway with the cheap default model when no Anthropic key is set', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'A_REMPLACER');
+    vi.stubEnv('AI_GATEWAY_API_KEY', 'gw-test');
+    const fetchMock = vi.fn(async (url: unknown, init?: RequestInit) => {
+      expect(String(url)).toBe('https://ai-gateway.vercel.sh/v1/messages');
+      const body = JSON.parse(String(init?.body));
+      expect(body.model).toBe('anthropic/claude-haiku-5.5');
+      expect(body.fallbacks).toBeUndefined();
+      expect(body.output_config.format.type).toBe('json_schema');
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer gw-test');
+      return new Response(JSON.stringify({
+        id: 'msg_2', type: 'message', role: 'assistant', model: 'anthropic/claude-haiku-5.5', stop_reason: 'end_turn', stop_sequence: null,
+        content: [{ type: 'text', text: JSON.stringify({ orders: [] }) }], usage: { input_tokens: 1, output_tokens: 1 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { extractRowsWithAI, aiExtractionAvailable } = await import('@/lib/integrations/google-sheets/ai-extract');
+    expect(aiExtractionAvailable()).toBe(true);
+    const r = await extractRowsWithAI([{ row: 2, cells: { A: 'x' } }], []);
+    expect(r.errors).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports exhausted or locked free credits clearly', async () => {
+    vi.stubEnv('AI_GATEWAY_API_KEY', 'gw-test');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ type: 'error', error: { type: 'customer_verification_required', message: 'Add a payment method to unlock free credits' } }), { status: 403, headers: { 'content-type': 'application/json' } })));
+    const { extractRowsWithAI } = await import('@/lib/integrations/google-sheets/ai-extract');
+    const r = await extractRowsWithAI([{ row: 2, cells: { A: 'x' } }], []);
+    expect(r.errors[0]).toMatch(/^ai_gateway_credits|^ai_api_error/);
+  });
+});
