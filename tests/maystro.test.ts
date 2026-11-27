@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { decodeMaystroWebhook, maystroAdapter } from '@/lib/integrations/delivery/adapters/maystro';
+import { decodeMaystroWebhook, matchCommune, maystroAdapter } from '@/lib/integrations/delivery/adapters/maystro';
 import type { AdapterContext, ShipmentInput } from '@/lib/integrations/delivery/types';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -54,5 +54,31 @@ describe('Maystro adapter (official docs)', () => {
     const twice = Buffer.from(once).toString('base64');
     expect(decodeMaystroWebhook(twice)).toEqual(payload);
     expect(decodeMaystroWebhook(JSON.stringify(payload))).toEqual(payload);
+  });
+
+  it('matches communes despite small spelling differences, never ambiguously', () => {
+    const list = [{ id: 1, name: 'Bab Azzouar' }, { id: 2, name: 'Bab El Oued' }, { id: 3, name: 'Kouba' }];
+    expect(matchCommune(list, 'Bab Ezzouar')?.id).toBe(1);
+    expect(matchCommune(list, 'kouba')?.id).toBe(3);
+    expect(matchCommune(list, 'Oran')).toBeNull();
+    expect(matchCommune([{ id: 1, name: 'Ain Abid' }, { id: 2, name: 'Ain Amid' }], 'Ain Aqid')).toBeNull();
+  });
+
+  it('uses the linked Maystro product, and never matches Arabic names by accident', async () => {
+    const calls: { url: string; body?: string }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (u: URL, init?: RequestInit) => {
+      const url = String(u);
+      calls.push({ url, body: init?.body ? String(init.body) : undefined });
+      if (url.includes('/shared/communes/')) return json([{ id: 30, wilaya: 2, name: 'Tenes' }]);
+      if (url.includes('/stores/product/')) return json({ list: { results: [
+        { id: 'uuid-a', product_id: null, logistical_description: 'موسع حزام الأمان السيارة x3', store: 's' },
+        { id: 'uuid-b', product_id: null, logistical_description: 'كشاف ضوئي الاطفال', store: 's' },
+      ], next: null } });
+      if (url.endsWith('/stores/orders/')) return json({ id: 'o', display_id: '1', status: 4 }, 201);
+      return json({}, 404);
+    }));
+    await maystroAdapter.createShipment!(ctx, { ...input, products: [{ name: 'موسع حزام الامان', quantity: 1, unitPrice: 230, externalId: 'uuid-a' }] });
+    expect(JSON.parse(calls.find((c) => c.url.endsWith('/stores/orders/'))!.body!).products[0].product_id).toBe('uuid-a');
+    await expect(maystroAdapter.createShipment!(ctx, { ...input, products: [{ name: 'منتج غير موجود', quantity: 1, unitPrice: 1 }] })).rejects.toMatchObject({ kind: 'validation' });
   });
 });

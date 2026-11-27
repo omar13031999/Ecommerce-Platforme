@@ -235,3 +235,53 @@ export async function importProviderProducts(providerId: string) {
     try { return await syncEcotrackProducts(id); } catch (e) { providerErr(e); }
   });
 }
+
+/** Products of the delivery company's store + current links (for the "Lier les produits" dialog). */
+export async function loadProviderProductLinks(providerId: string) {
+  return runAction(async () => {
+    await requireUser('products.manage', 'delivery.manage');
+    const id = z.guid().parse(providerId);
+    const { loadProvider } = await import('@/lib/services/delivery');
+    const { provider, ctx } = await loadProvider(id);
+    if (provider.code !== 'maystro') throw new AppError('not_supported', 400);
+    const { listMaystroProducts } = await import('@/lib/integrations/delivery/adapters/maystro');
+    let external;
+    try { external = await listMaystroProducts(ctx); } catch (e) { providerErr(e); }
+    const supabase = await createClient();
+    const [{ data: products }, { data: links }] = await Promise.all([
+      supabase.from('products').select('id, name, sku').eq('is_archived', false).order('name'),
+      supabase.from('product_provider_links').select('product_id, external_id').eq('provider_id', id),
+    ]);
+    return {
+      external: external.map((p) => ({ id: p.id, name: p.logistical_description.trim() })).sort((a, b) => a.name.localeCompare(b.name)),
+      products: products ?? [],
+      links: Object.fromEntries((links ?? []).map((l) => [l.product_id, l.external_id])) as Record<string, string>,
+    };
+  });
+}
+
+const linksSchema = z.object({
+  providerId: z.guid(),
+  links: z.array(z.object({ product_id: z.guid(), external_id: z.string().max(100), external_name: z.string().max(300).optional() })).max(2000),
+});
+export async function saveProviderProductLinks(input: z.input<typeof linksSchema>) {
+  return runAction(async () => {
+    await requireUser('products.manage', 'delivery.manage');
+    const p = linksSchema.parse(input);
+    const supabase = await createClient();
+    const set = p.links.filter((l) => l.external_id);
+    const cleared = p.links.filter((l) => !l.external_id).map((l) => l.product_id);
+    if (cleared.length) {
+      const { error } = await supabase.from('product_provider_links').delete().eq('provider_id', p.providerId).in('product_id', cleared);
+      if (error) throw fromDbError(error);
+    }
+    if (set.length) {
+      const { error } = await supabase.from('product_provider_links').upsert(
+        set.map((l) => ({ product_id: l.product_id, provider_id: p.providerId, external_id: l.external_id, external_name: l.external_name ?? null, updated_at: new Date().toISOString() })),
+        { onConflict: 'product_id,provider_id' },
+      );
+      if (error) throw fromDbError(error);
+    }
+    return set.length;
+  });
+}

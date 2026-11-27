@@ -15,7 +15,7 @@ export type ShipmentInput = {
   commune: string | null;
   address: string | null;
   deliveryType: 'home' | 'stopdesk';
-  products: { name: string; quantity: number; unitPrice: number; sku?: string | null }[];
+  products: { name: string; quantity: number; unitPrice: number; sku?: string | null; productId?: string | null; externalId?: string | null }[];
   productsLabel: string;
   /** Amount the courier collects from the customer (COD). */
   codAmount: number;

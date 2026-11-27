@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TBody, TD, TR } from '@/components/ui/table';
 import { useAction } from '@/components/app/use-action';
 import { deleteSheetSource, disconnectConnection, loadSpreadsheet, saveSheetSource, syncSheetNow, testSheetSource } from '@/lib/actions/integrations';
-import { importProviderCommunes, importProviderProducts, saveProvider, saveRates, saveStatusMapping, testProvider } from '@/lib/actions/delivery';
+import { importProviderCommunes, importProviderProducts, loadProviderProductLinks, saveProvider, saveProviderProductLinks, saveRates, saveStatusMapping, testProvider } from '@/lib/actions/delivery';
 import { importMetaAccounts } from '@/lib/actions/ads';
 import { MAPPABLE_FIELDS, REQUIRED_FIELDS, type ColumnMapping, type MappableField } from '@/lib/integrations/google-sheets/mapping';
 import { DELIVERY_STATUSES } from '@/lib/domain/statuses';
@@ -269,6 +269,7 @@ export function ProviderTools({ providerId, code, mappings, canRates, rates, wil
           <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => importProviderProducts(providerId), { success: (d) => t('integrations.productsImported', { total: d?.total ?? 0, created: d?.created ?? 0, updated: d?.updated ?? 0 }) })}><Package />{t('integrations.importProducts')}</Button>
         </>
       ) : null}
+      {code === 'maystro' ? <ProductLinksDialog providerId={providerId} /> : null}
       {code !== 'manual' ? (
         <Dialog>
           <DialogTrigger asChild><Button size="sm" variant="outline">{t('integrations.statusMappings')} ({mappings.length})</Button></DialogTrigger>
@@ -310,5 +311,71 @@ export function ProviderTools({ providerId, code, mappings, canRates, rates, wil
         </Dialog>
       ) : null}
     </div>
+  );
+}
+
+const linkKey = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\u0621-\u064a]/g, '');
+
+/** Link each catalogue product to the delivery company's own product (exact-name matches pre-filled). */
+function ProductLinksDialog({ providerId }: { providerId: string }) {
+  const t = useTranslations();
+  const { run, pending } = useAction();
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<{ external: { id: string; name: string }[]; products: { id: string; name: string; sku: string | null }[] } | null>(null);
+  const [links, setLinks] = useState<Record<string, string>>({});
+  const [filter, setFilter] = useState('');
+  function load() {
+    run(() => loadProviderProductLinks(providerId), {
+      refresh: false,
+      onSuccess: (d) => {
+        if (!d) return;
+        setData({ external: d.external, products: d.products });
+        const byName = new Map(d.external.map((e) => [linkKey(e.name), e.id]));
+        const next: Record<string, string> = { ...d.links };
+        for (const p of d.products) if (!next[p.id] && byName.has(linkKey(p.name))) next[p.id] = byName.get(linkKey(p.name))!;
+        setLinks(next);
+      },
+    });
+  }
+  const shown = (data?.products ?? []).filter((p) => !filter || `${p.name} ${p.sku ?? ''}`.toLowerCase().includes(filter.toLowerCase()));
+  const linked = Object.values(links).filter(Boolean).length;
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o && !data) load(); }}>
+      <DialogTrigger asChild><Button size="sm" variant="outline">{t('integrations.linkProducts')}</Button></DialogTrigger>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader><DialogTitle>{t('integrations.linkProducts')}</DialogTitle><DialogDescription>{t('integrations.linkProductsHelp')}</DialogDescription></DialogHeader>
+        {!data ? <p className="text-sm text-muted-foreground">{pending ? '…' : ''}</p> : (
+          <div className="grid gap-2">
+            <div className="flex items-center gap-2">
+              <Input className="h-8" placeholder={t('common.search')} value={filter} onChange={(e) => setFilter(e.target.value)} />
+              <span className="whitespace-nowrap text-xs text-muted-foreground">{linked} / {data.products.length}</span>
+            </div>
+            <div className="max-h-[55vh] overflow-y-auto rounded-md border">
+              <table className="w-full text-xs">
+                <tbody>
+                  {shown.map((p) => (
+                    <tr key={p.id} className={links[p.id] ? '' : 'bg-warning/10'}>
+                      <td className="p-1.5"><div className="font-medium">{p.name}</div>{p.sku ? <div className="font-mono text-muted-foreground">{p.sku}</div> : null}</td>
+                      <td className="w-1/2 p-1.5">
+                        <Select className="h-8 text-xs" value={links[p.id] ?? ''} onChange={(e) => setLinks({ ...links, [p.id]: e.target.value })}>
+                          <option value="">— {t('integrations.notLinked')} —</option>
+                          {data.external.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                        </Select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button disabled={!data || pending} onClick={() => run(() => saveProviderProductLinks({
+            providerId,
+            links: (data?.products ?? []).map((p) => ({ product_id: p.id, external_id: links[p.id] ?? '', external_name: data?.external.find((x) => x.id === links[p.id])?.name })),
+          }), { success: t('common.saved'), onSuccess: () => setOpen(false) })}>{t('common.save')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

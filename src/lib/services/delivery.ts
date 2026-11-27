@@ -46,11 +46,11 @@ async function buildShipmentInput(orderId: string, reference: string): Promise<S
   const db = createAdminClient();
   const { data: o, error } = await db
     .from('orders')
-    .select('id, reference, customer_name, phone, phone2, wilaya_code, commune, address, delivery_type, total_amount, delivery_fee, customer_notes, wilayas(name_fr), order_items(product_name, quantity, unit_price, sku, products(sku))')
+    .select('id, reference, customer_name, phone, phone2, wilaya_code, commune, address, delivery_type, total_amount, delivery_fee, customer_notes, wilayas(name_fr), order_items(product_id, product_name, quantity, unit_price, sku, products(sku))')
     .eq('id', orderId)
     .single();
   if (error || !o) throw new AppError('order_not_found', 404);
-  const items = (o.order_items ?? []) as unknown as { product_name: string; quantity: number; unit_price: number; sku: string | null; products: { sku: string | null } | null }[];
+  const items = (o.order_items ?? []) as unknown as { product_id: string | null; product_name: string; quantity: number; unit_price: number; sku: string | null; products: { sku: string | null } | null }[];
   const { firstName, lastName } = splitName(o.customer_name);
   const wilaya = o.wilayas as unknown as { name_fr: string } | null;
   return {
@@ -67,7 +67,7 @@ async function buildShipmentInput(orderId: string, reference: string): Promise<S
     commune: o.commune,
     address: o.address,
     deliveryType: o.delivery_type,
-    products: items.map((i) => ({ name: i.product_name, quantity: i.quantity, unitPrice: Number(i.unit_price), sku: i.products?.sku || i.sku || null })),
+    products: items.map((i) => ({ name: i.product_name, quantity: i.quantity, unitPrice: Number(i.unit_price), sku: i.products?.sku || i.sku || null, productId: i.product_id })),
     productsLabel: items.map((i) => `${i.product_name} x${i.quantity}`).join(', '),
     codAmount: Number(o.total_amount),
     deliveryFeeCharged: Number(o.delivery_fee),
@@ -126,6 +126,7 @@ export async function submitOrder(orderId: string, providerId: string, actorId: 
   await db.from('delivery_shipments').update({ attempt_count: 1, request_payload: input as unknown as object }).eq('id', sh.id);
   try {
     if (provider.code === 'ecotrack') await alignWithEcotrack(provider.id, input);
+    if (provider.code === 'maystro') await attachProviderProductLinks(provider.id, input);
     const res = await adapter.createShipment(ctx, input);
     const { error } = await db.rpc('complete_shipment_submission', {
       p_shipment_id: sh.id, p_tracking: res.trackingNumber, p_provider_shipment_id: res.providerShipmentId ?? null,
@@ -160,6 +161,15 @@ async function alignWithEcotrack(providerId: string, input: ShipmentInput) {
     throw new ProviderError('validation', `no_stop_desk: pas de stop desk ECOTRACK à « ${hit.name} ». Choisissez une commune avec stop desk ou la livraison à domicile.`);
   }
   input.commune = hit.name;
+}
+
+/** Provider-side product ids chosen in "Lier les produits" (Maystro orders need them). */
+async function attachProviderProductLinks(providerId: string, input: ShipmentInput) {
+  const ids = input.products.map((p) => p.productId).filter(Boolean) as string[];
+  if (!ids.length) return;
+  const { data } = await createAdminClient().from('product_provider_links').select('product_id, external_id').eq('provider_id', providerId).in('product_id', ids);
+  const map = new Map((data ?? []).map((l) => [l.product_id as string, l.external_id as string]));
+  for (const p of input.products) if (p.productId && map.has(p.productId)) p.externalId = map.get(p.productId)!;
 }
 
 export async function submitOrders(orderIds: string[], providerId: string, actorId: string | null, trigger: 'manual' | 'schedule' = 'manual') {

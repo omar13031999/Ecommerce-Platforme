@@ -15,10 +15,12 @@ import type { DeliveryStatus } from '@/lib/domain/statuses';
  *  - webhooks: JSON base64-encoded (decode twice), events orderCreated / OrderStatusChanged
  *
  * tracking number = Maystro display_id (printed on the slip); the order uuid is kept as provider id.
- * Optional config: { "store_id": "<uuid>", "express": false }.
+ * Optional config: { "store_id": "<uuid>", "express": false, "create_missing_products": false }.
+ * Products are taken from the links set in "Lier les produits", else matched by SKU (= Maystro product_id)
+ * or exact name; never guessed. Creating missing products is off by default (a new Maystro product has no stock).
  */
 
-type MaystroConfig = { store_id?: string; express?: boolean };
+type MaystroConfig = { store_id?: string; express?: boolean; create_missing_products?: boolean };
 type MaystroProduct = { id: string; product_id: string | null; logistical_description: string; store?: string };
 type MaystroOrder = { id: string; display_id: string | number; status: number; external_order_id?: string | null; alert_reason_name?: string | null; abort_reason?: unknown; postponed_to?: string | null };
 
@@ -62,7 +64,7 @@ function auth(ctx: AdapterContext) {
   if (!t) throw new ProviderError('auth', 'missing_api_token');
   return { Authorization: `Token ${t}` };
 }
-const key = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const key = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\u0621-\u064a]/g, ''); // keeps Arabic letters
 const cut = (s: string | null | undefined, n = 255) => (s ?? '').trim().slice(0, n);
 
 function validationMessage(body: unknown, fallback: string): string {
@@ -79,11 +81,33 @@ async function get<T>(ctx: AdapterContext, path: string, query?: Record<string, 
   return (await httpJson<T>({ url: `${base(ctx)}${path}`, method: 'GET', headers: auth(ctx), query, timeoutMs: 30000 })).data;
 }
 
-/** Maystro commune id for a wilaya + commune name (accent/case/punctuation-insensitive). */
+function distance(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0]![j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    d[i]![j] = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+  }
+  return d[a.length]![b.length]!;
+}
+
+/**
+ * Maystro commune for a wilaya + commune name: exact (accent/case/punctuation-insensitive), else the single
+ * closest spelling within 2 letters ("Bab Ezzouar" -> "Bab Azzouar"); null when absent or ambiguous.
+ */
+export function matchCommune(list: { id: number; name: string }[], commune: string): { id: number; name: string } | null {
+  const k = key(commune);
+  if (!k) return null;
+  const exact = list.find((c) => key(c.name) === k);
+  if (exact) return exact;
+  if (k.length < 5) return null;
+  const scored = list.map((c) => ({ c, d: distance(key(c.name), k) })).filter((x) => x.d <= 2).sort((a, b) => a.d - b.d);
+  if (!scored.length || (scored[1] && scored[1].d === scored[0]!.d)) return null;
+  return scored[0]!.c;
+}
+
 export async function maystroCommuneId(ctx: AdapterContext, wilaya: number, commune: string): Promise<number | null> {
   const list = await get<{ id: number; wilaya: number; name: string }[]>(ctx, '/shared/communes/', { wilaya });
-  const k = key(commune);
-  return (Array.isArray(list) ? list : []).find((c) => key(c.name) === k)?.id ?? null;
+  return matchCommune(Array.isArray(list) ? list : [], commune)?.id ?? null;
 }
 
 /** All store products (20 per page, paginated with "next"). */
@@ -105,10 +129,13 @@ async function resolveProducts(ctx: AdapterContext, input: ShipmentInput) {
   const lines = [];
   for (const p of input.products) {
     const sku = p.sku?.trim();
-    let hit = (sku && catalog.find((c) => c.product_id && c.product_id.toLowerCase() === sku.toLowerCase()))
+    let hit = (p.externalId && catalog.find((c) => c.id === p.externalId))
+      || (sku && catalog.find((c) => c.product_id && c.product_id.toLowerCase() === sku.toLowerCase()))
       || catalog.find((c) => key(c.logistical_description) === key(p.name));
     if (!hit) {
-      if (!storeId) throw new ProviderError('validation', `maystro_product_unknown: « ${p.name} » n'existe pas dans le magasin Maystro (ajoutez-le ou renseignez "store_id" dans la configuration).`);
+      if (!cfg(ctx).create_missing_products || !storeId) {
+        throw new ProviderError('validation', `maystro_product_unknown: « ${p.name} » n'est lié à aucun produit du magasin Maystro. Liez-le dans Intégrations → Maystro → Lier les produits.`);
+      }
       try {
         hit = (await httpJson<MaystroProduct>({
           url: `${base(ctx)}/stores/product/`, method: 'POST', headers: auth(ctx),
