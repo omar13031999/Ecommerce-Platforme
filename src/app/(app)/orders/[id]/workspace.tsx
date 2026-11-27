@@ -13,6 +13,7 @@ import { formatDZD, type AppLocale } from '@/lib/format';
 import { updateOrderCustomer, updateOrderItems } from '@/lib/actions/orders';
 import type { ConfirmationStatus } from '@/lib/domain/statuses';
 import { StatusActions } from './order-actions';
+import { WhatsAppButton } from '@/components/app/whatsapp-button';
 
 type Customer = {
   customer_name: string; phone: string; phone2: string; wilaya_code: number | null; commune: string; address: string;
@@ -29,9 +30,9 @@ const PLACEHOLDER_PRODUCT = 'Produit non renseigné';
  * products and the call outcome — edited in place, saved with one button.
  */
 export function ConfirmationWorkspace({
-  orderId, version, status, isManager, initial, items, catalog, wilayas, communes, deliveryFee, discount, reviewReason,
+  orderId, reference, version, status, isManager, initial, items, catalog, wilayas, communes, deliveryFee, discount, reviewReason,
 }: {
-  orderId: string; version: number; status: ConfirmationStatus; isManager: boolean;
+  orderId: string; reference: number; version: number; status: ConfirmationStatus; isManager: boolean;
   initial: Customer; items: Omit<Line, 'key'>[]; catalog: CatalogItem[];
   wilayas: { code: number; name: string }[]; communes: CommuneOption[];
   deliveryFee: number; discount: number; reviewReason: string | null;
@@ -115,6 +116,7 @@ export function ConfirmationWorkspace({
             <div className="flex gap-1">
               <Input dir="ltr" className={cn('tabular', warn('phone'))} value={c.phone} onChange={(e) => set('phone', e.target.value)} />
               {c.phone ? <Button asChild size="icon" variant="success" className="shrink-0"><a href={`tel:${c.phone.replace(/\s/g, '')}`} aria-label={t('orders.call')}><Phone /></a></Button> : null}
+              <WhatsAppButton phone={c.phone} ctx={{ name: c.customer_name, reference, total: formatDZD(total, locale), products: lines.map((l) => `${l.product_name} ×${l.quantity}`).join('، ') }} />
             </div></div>
           <div className="grid gap-1.5"><Label>{t('orders.phone2')}</Label>
             <div className="flex gap-1">

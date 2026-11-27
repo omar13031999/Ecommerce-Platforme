@@ -208,3 +208,66 @@ export async function deleteOrders(orderIds: string[]) {
     return data as number;
   });
 }
+
+/** Blacklist the phone numbers of the selected orders (managers). */
+export async function blockOrderPhones(input: { orderIds: string[]; reason?: string }) {
+  return runAction(async () => {
+    await requireUser('orders.manage');
+    const p = z.object({ orderIds: uuids, reason: z.string().trim().max(300).optional() }).parse(input);
+    const supabase = await createClient();
+    const { data: rows, error } = await supabase.from('orders').select('phone').in('id', p.orderIds);
+    if (error) throw fromDbError(error);
+    const phones = [...new Set((rows ?? []).map((r) => r.phone as string).filter((x) => x && x.replace(/\D/g, '').length >= 9))];
+    for (const phone of phones) {
+      const { error: e } = await supabase.rpc('block_phone', { p_phone: phone, p_reason: p.reason ?? null });
+      if (e) throw fromDbError(e);
+    }
+    return phones.length;
+  });
+}
+
+export async function unblockPhone(phone: string) {
+  return runAction(async () => {
+    await requireUser('orders.manage');
+    const supabase = await createClient();
+    const { error } = await supabase.rpc('unblock_phone', { p_phone: z.string().trim().min(6).max(30).parse(phone) });
+    if (error) throw fromDbError(error);
+  });
+}
+
+/** Same status for many orders (managers); each change goes through the normal workflow rules. */
+export async function bulkChangeStatus(input: { orderIds: string[]; status: string }) {
+  return runAction(async () => {
+    await requireUser('orders.manage');
+    const p = z.object({ orderIds: uuids, status: z.enum(CONFIRMATION_STATUSES).refine((s) => s !== 'postponed') }).parse(input);
+    const supabase = await createClient();
+    let ok = 0;
+    let failed = 0;
+    for (const id of p.orderIds) {
+      const { error } = await supabase.rpc('set_confirmation_status', { p_order_id: id, p_status: p.status, p_note: null, p_expected_version: null });
+      if (error) failed++;
+      else ok++;
+    }
+    return { ok, failed };
+  });
+}
+
+/** Saved list filters (per user). */
+export async function saveOrderFilter(input: { name: string; query: string }) {
+  return runAction(async () => {
+    await requireUser();
+    const p = z.object({ name: z.string().trim().min(1).max(60), query: z.string().max(2000) }).parse(input);
+    const supabase = await createClient();
+    const { error } = await supabase.from('saved_filters').insert({ name: p.name, query: p.query.replace(/(^|&)page=\d+/g, '') });
+    if (error) throw fromDbError(error);
+  });
+}
+
+export async function deleteOrderFilter(id: string) {
+  return runAction(async () => {
+    await requireUser();
+    const supabase = await createClient();
+    const { error } = await supabase.from('saved_filters').delete().eq('id', uuid.parse(id));
+    if (error) throw fromDbError(error);
+  });
+}

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { ConfirmationBadge, DeliveryBadge } from '@/components/app/status-badge';
 import { formatDZD, formatDateTime, type AppLocale } from '@/lib/format';
 import { isConfirmationStatus, isDeliveryStatus, type ConfirmationStatus, type DeliveryStatus } from '@/lib/domain/statuses';
-import { NoteForm, AssignControl, DeliveryControl, ReviewControl, ItemMatcher, DeleteOrderButton } from './order-actions';
+import { NoteForm, AssignControl, DeliveryControl, ReviewControl, ItemMatcher, DeleteOrderButton, UnblockPhoneButton } from './order-actions';
 
 type Event = { id: number; actor_id: string | null; actor_label: string | null; event_type: string; field: string | null; old_value: string | null; new_value: string | null; note: string | null; metadata: Record<string, string>; created_at: string };
 
@@ -100,6 +100,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           <Link href={`/orders/${order.possible_duplicate_of}`}><Badge className="bg-muted text-muted-foreground ring-border"><Copy className="size-3" />{t('orders.possibleDuplicate')}</Badge></Link>
         ) : null}
         {order.has_unmatched_items ? <Badge className="bg-destructive/10 text-destructive ring-destructive/30"><PackageX className="size-3" />{t('orders.unmatched')}</Badge> : null}
+        {order.customer_blocked ? <><Badge className="bg-destructive text-destructive-foreground ring-destructive">⛔ {t('orders.blockedCustomer')}</Badge>{session.can('orders.manage') ? <UnblockPhoneButton phone={order.phone} /> : null}</> : null}
         {session.profile.role === 'admin' ? <div className="ms-auto"><DeleteOrderButton orderId={order.id} reference={order.reference} /></div> : null}
       </div>
 
@@ -124,6 +125,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               <CardContent>
                 <ConfirmationWorkspace
                   orderId={order.id}
+                  reference={order.reference}
                   version={order.version}
                   status={order.confirmation_status}
                   isManager={session.can('orders.manage')}

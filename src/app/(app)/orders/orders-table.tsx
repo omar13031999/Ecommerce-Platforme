@@ -13,21 +13,24 @@ import {
 import { ConfirmationBadge, DeliveryBadge } from '@/components/app/status-badge';
 import { useAction } from '@/components/app/use-action';
 import { PostponeDialog } from '@/components/app/postpone-dialog';
+import { WhatsAppButton } from '@/components/app/whatsapp-button';
 import { formatDZD, formatDateTime, type AppLocale } from '@/lib/format';
 import { CONFIRMATION_STATUSES, nextNoAnswer, type ConfirmationStatus, type DeliveryStatus } from '@/lib/domain/statuses';
-import { assignOrders, autoAssignOrders, changeConfirmationStatus, deleteOrders, submitToDelivery, unassignOrders } from '@/lib/actions/orders';
+import { assignOrders, autoAssignOrders, blockOrderPhones, bulkChangeStatus, changeConfirmationStatus, deleteOrders, submitToDelivery, unassignOrders } from '@/lib/actions/orders';
 
 export type OrderRow = {
   id: string; reference: number; external_id: string | null; source: string; customer_name: string; phone: string;
   wilaya_code: number | null; commune: string | null; total_amount: number; confirmation_status: ConfirmationStatus;
   delivery_status: DeliveryStatus; assigned_to: string | null; ordered_at: string; tracking_number: string | null;
   needs_review: boolean; has_unmatched_items: boolean; possible_duplicate_of: string | null; contact_attempts: number;
-  version: number; postponed_until: string | null; order_items: { product_name: string; quantity: number }[];
+  version: number; postponed_until: string | null; delivery_type: 'home' | 'stopdesk'; utm_source: string | null; customer_blocked: boolean; order_items: { product_name: string; quantity: number }[];
 };
 
-const COLUMNS = ['reference', 'date', 'customer', 'phone', 'wilaya', 'products', 'total', 'confirmation', 'delivery', 'agent', 'tracking'] as const;
+const COLUMNS = ['reference', 'date', 'elapsed', 'customer', 'phone', 'wilaya', 'products', 'total', 'confirmation', 'delivery', 'agent', 'tracking', 'utm'] as const;
 type Col = (typeof COLUMNS)[number];
-const STORAGE_KEY = 'orders.columns.v1';
+const STORAGE_KEY = 'orders.columns.v2';
+/** Hidden until the user shows them (column menu). */
+const DEFAULT_HIDDEN: Col[] = ['utm'];
 
 export function OrdersTable({
   rows, agentNames, agents, providers, canAssign, canSubmit, showAgent, sort, currentUserId, isManager, canDelete = false,
@@ -42,9 +45,10 @@ export function OrdersTable({
   const params = useSearchParams();
   const { run, pending } = useAction();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [hidden, setHidden] = useState<Set<Col>>(new Set());
+  const [hidden, setHidden] = useState<Set<Col>>(new Set(DEFAULT_HIDDEN));
   const [agentId, setAgentId] = useState('');
   const [providerId, setProviderId] = useState(providers[0]?.id ?? '');
+  const [bulkStatus, setBulkStatus] = useState('');
 
   useEffect(() => {
     try {
@@ -64,7 +68,7 @@ export function OrdersTable({
   const visible = useMemo(() => COLUMNS.filter((c) => !hidden.has(c) && (c !== 'agent' || showAgent)), [hidden, showAgent]);
   const ids = [...selected];
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
-  const bulk = canAssign || canSubmit || canDelete;
+  const bulk = canAssign || canSubmit || canDelete || isManager;
 
   const sortHref = (col: string) => {
     const sp = new URLSearchParams(params.toString());
@@ -90,11 +94,14 @@ export function OrdersTable({
     delivery: <SortHead col="delivery_status" label={t('orders.deliveryStatus')} />,
     agent: t('orders.assignedTo'),
     tracking: t('orders.tracking'),
+    elapsed: t('orders.elapsed'),
+    utm: 'UTM',
   };
   const plainLabel: Record<Col, string> = {
     reference: t('orders.reference'), date: t('orders.createdAt'), customer: t('orders.customer'), phone: t('orders.phone'),
     wilaya: t('orders.wilaya'), products: t('orders.products'), total: t('orders.totalAmount'), confirmation: t('orders.confirmationStatus'),
     delivery: t('orders.deliveryStatus'), agent: t('orders.assignedTo'), tracking: t('orders.tracking'),
+    elapsed: t('orders.elapsed'), utm: 'UTM source',
   };
 
   function cell(c: Col, r: OrderRow) {
@@ -106,12 +113,24 @@ export function OrdersTable({
             {r.needs_review ? <AlertTriangle className="size-3.5 text-warning" aria-label={t('orders.needsReview')} /> : null}
             {r.possible_duplicate_of ? <Copy className="size-3.5 text-muted-foreground" aria-label={t('orders.possibleDuplicate')} /> : null}
             {r.has_unmatched_items ? <PackageX className="size-3.5 text-destructive" aria-label={t('orders.unmatched')} /> : null}
+            {r.customer_blocked ? <span title={t('orders.blockedCustomer')} aria-label={t('orders.blockedCustomer')}>⛔</span> : null}
           </div>
         );
       case 'date': return <span className="whitespace-nowrap text-xs text-muted-foreground">{formatDateTime(r.ordered_at, locale)}</span>;
       case 'customer': return <span className="font-medium">{r.customer_name}</span>;
-      case 'phone': return <span dir="ltr" className="tabular whitespace-nowrap">{r.phone}</span>;
-      case 'wilaya': return <span className="whitespace-nowrap">{r.wilaya_code ? String(r.wilaya_code).padStart(2, '0') : '—'} {r.commune ?? ''}</span>;
+      case 'phone': return (
+        <div className="flex items-center gap-1">
+          <span dir="ltr" className="tabular whitespace-nowrap">{r.phone}</span>
+          <WhatsAppButton iconOnly phone={r.phone} ctx={{ name: r.customer_name, reference: r.reference, total: formatDZD(r.total_amount, locale), products: r.order_items.map((i) => `${i.product_name} ×${i.quantity}`).join('، '), tracking: r.tracking_number }} />
+        </div>
+      );
+      case 'elapsed': return <Elapsed since={r.ordered_at} />;
+      case 'utm': return <span className="text-xs text-muted-foreground">{r.utm_source ?? '—'}</span>;
+      case 'wilaya': return (
+        <span className="whitespace-nowrap">{r.wilaya_code ? String(r.wilaya_code).padStart(2, '0') : '—'} {r.commune ?? ''}
+          {r.delivery_type === 'stopdesk' ? <span className="ms-1 rounded bg-cyan-100 px-1 text-[10px] font-medium text-cyan-800 dark:bg-cyan-950 dark:text-cyan-200">STOP DESK</span> : null}
+        </span>
+      );
       case 'products': return <span className="line-clamp-2 max-w-[220px] text-xs">{r.order_items.map((i) => `${i.product_name} ×${i.quantity}`).join(', ')}</span>;
       case 'total': return <span className="tabular whitespace-nowrap">{formatDZD(r.total_amount, locale)}</span>;
       case 'confirmation':
@@ -160,6 +179,22 @@ export function OrdersTable({
                 <Button size="sm" disabled={!providerId || pending}
                   onClick={() => run(() => submitToDelivery({ orderIds: ids, providerId }), { success: (d) => t('orders.bulkSubmitted', { ok: d?.ok ?? 0, failed: d?.failed ?? 0 }) })}>
                   <Send />{t('orders.submitDelivery')}
+                </Button>
+              </>
+            ) : null}
+            {isManager ? (
+              <>
+                <Select className="h-8 w-44" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} aria-label={t('orders.changeStatus')}>
+                  <option value="">{t('orders.changeStatus')}…</option>
+                  {CONFIRMATION_STATUSES.filter((s) => s !== 'postponed').map((s) => <option key={s} value={s}>{t(`confirmation.${s}`)}</option>)}
+                </Select>
+                <Button size="sm" variant="outline" disabled={!bulkStatus || pending}
+                  onClick={() => run(() => bulkChangeStatus({ orderIds: ids, status: bulkStatus }), { success: (d) => t('orders.bulkStatusDone', { ok: d?.ok ?? 0, failed: d?.failed ?? 0 }), onSuccess: () => setBulkStatus('') })}>
+                  {t('common.apply')}
+                </Button>
+                <Button size="sm" variant="outline" disabled={pending}
+                  onClick={() => { const reason = window.prompt(t('orders.blockReason')); if (reason !== null) run(() => blockOrderPhones({ orderIds: ids, reason }), { success: (n) => t('orders.blockedDone', { count: Number(n) }) }); }}>
+                  ⛔ {t('orders.block')}
                 </Button>
               </>
             ) : null}
@@ -261,4 +296,12 @@ function PostponedLabel({ due }: { due: Date }) {
       {late ? '⏰ ' : ''}{t('callBackAt', { date: formatDateTime(due.toISOString(), locale) })}
     </span>
   );
+}
+
+/** Time since the order came in ("2 h", "3 j"), red after 24 h while still to process. */
+function Elapsed({ since }: { since: string }) {
+  const t = useTranslations('orders');
+  const mins = Math.max(0, Math.round((Date.now() - Date.parse(since)) / 60000));
+  const label = mins < 60 ? t('elapsedMin', { n: mins }) : mins < 1440 ? t('elapsedHours', { n: Math.floor(mins / 60) }) : t('elapsedDays', { n: Math.floor(mins / 1440) });
+  return <span className={mins >= 1440 ? 'whitespace-nowrap text-xs font-medium text-destructive' : mins >= 180 ? 'whitespace-nowrap text-xs text-warning' : 'whitespace-nowrap text-xs text-muted-foreground'}>{label}</span>;
 }

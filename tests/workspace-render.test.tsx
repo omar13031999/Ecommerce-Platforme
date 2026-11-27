@@ -11,7 +11,7 @@ describe('ConfirmationWorkspace', () => {
     const { ConfirmationWorkspace } = await import('@/app/(app)/orders/[id]/workspace');
     const html = renderToString(
       <NextIntlClientProvider locale="fr" messages={messages} timeZone="Africa/Algiers">
-        <ConfirmationWorkspace orderId="o1" version={1} status="new" isManager={false}
+        <ConfirmationWorkspace orderId="o1" reference={10001} version={1} status="new" isManager={false}
           initial={{ customer_name: 'Client sans nom', phone: '', phone2: '', wilaya_code: 16, commune: '', address: '', delivery_type: 'home', customer_notes: '' }}
           items={[{ id: 'i1', product_id: null, product_name: 'Produit non renseigné', sku: null, quantity: 1, unit_price: 0 }]}
           catalog={[{ id: 'p1', name: 'Tn Gold 41', sku: 'TG41', selling_price: 3500 }]}

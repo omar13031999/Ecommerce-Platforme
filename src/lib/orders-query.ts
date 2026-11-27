@@ -8,6 +8,14 @@ export type OrderSearchParams = {
   page?: string; size?: string; sort?: string; dir?: string;
   /** 'tracking': orders handed to a delivery company; default: orders still to process. */
   view?: string;
+  /** Total to collect between tmin and tmax (DZD). */
+  tmin?: string; tmax?: string;
+  /** Delivery type: home | stopdesk. */
+  dt?: string;
+  /** UTM source contains. */
+  utm?: string;
+  /** '1': only blacklisted numbers. */
+  blocked?: string;
 };
 
 export const SORTABLE = ['ordered_at', 'reference', 'total_amount', 'confirmation_status', 'delivery_status', 'updated_at'] as const;
@@ -73,6 +81,11 @@ export function applyOrderFilters<Q extends { [k: string]: any }>(query: Q, sp: 
   else if (sp.agent && /^[0-9a-f-]{36}$/i.test(sp.agent)) q = q.eq('assigned_to', sp.agent);
   if (sp.wilaya && /^\d{1,2}$/.test(sp.wilaya)) q = q.eq('wilaya_code', Number(sp.wilaya));
   if (sp.product && /^[0-9a-f-]{36}$/i.test(sp.product)) q = q.eq('filter_items.product_id', sp.product);
+  if (sp.tmin && /^\d+(\.\d+)?$/.test(sp.tmin)) q = q.gte('total_amount', Number(sp.tmin));
+  if (sp.tmax && /^\d+(\.\d+)?$/.test(sp.tmax)) q = q.lte('total_amount', Number(sp.tmax));
+  if (sp.dt === 'home' || sp.dt === 'stopdesk') q = q.eq('delivery_type', sp.dt);
+  if (sp.utm?.trim()) q = q.ilike('utm_source', `%${sp.utm.trim().replace(/[%_\\]/g, '').slice(0, 60)}%`);
+  if (sp.blocked === '1') q = q.eq('customer_blocked', true);
   if (sp.review === '1') q = q.eq('needs_review', true);
   if (sp.unmatched === '1') q = q.eq('has_unmatched_items', true);
   if (sp.queue === 'waiting') q = q.is('assigned_to', null).in('confirmation_status', workloadStatuses);
@@ -82,7 +95,7 @@ export function applyOrderFilters<Q extends { [k: string]: any }>(query: Q, sp: 
 export function orderSelect(sp: OrderSearchParams) {
   const base =
     'id, reference, external_id, source, customer_name, phone, wilaya_code, commune, total_amount, confirmation_status, delivery_status, ' +
-    'assigned_to, ordered_at, updated_at, version, postponed_until, tracking_number, needs_review, has_unmatched_items, possible_duplicate_of, contact_attempts, ' +
+    'assigned_to, ordered_at, updated_at, version, postponed_until, tracking_number, delivery_type, utm_source, customer_blocked, needs_review, has_unmatched_items, possible_duplicate_of, contact_attempts, ' +
     'order_items(product_name, quantity)';
   return sp.product ? `${base}, filter_items:order_items!inner(product_id)` : base;
 }

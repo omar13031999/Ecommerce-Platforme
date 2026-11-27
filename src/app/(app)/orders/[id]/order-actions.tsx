@@ -14,7 +14,7 @@ import { useAction } from '@/components/app/use-action';
 import { CONFIRMATION_STATUSES, DELIVERY_STATUSES, nextNoAnswer, type ConfirmationStatus } from '@/lib/domain/statuses';
 import {
   addOrderNote, assignOrders, autoAssignOrders, changeConfirmationStatus, matchOrderItem, resolveReview,
-  deleteOrders, setDeliveryManual, submitToDelivery, updateOrderCustomer,
+  deleteOrders, setDeliveryManual, submitToDelivery, unblockPhone, updateOrderCustomer,
 } from '@/lib/actions/orders';
 
 export function StatusActions({ orderId, status, version, isManager, beforeChange, confirmBlockers }: {
@@ -227,4 +227,10 @@ export function DeleteOrderButton({ orderId, reference }: { orderId: string; ref
       <Trash2 />{t('common.delete')}
     </Button>
   );
+}
+
+export function UnblockPhoneButton({ phone }: { phone: string }) {
+  const t = useTranslations('orders');
+  const { run, pending } = useAction();
+  return <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => unblockPhone(phone), { success: t('unblock') })}>{t('unblock')}</Button>;
 }

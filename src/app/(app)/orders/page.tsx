@@ -49,6 +49,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     { key: 'closed', href: '/orders?view=closed&sort=updated_at&dir=desc', label: t('orders.tabClosed'), count: counts[3]! },
   ];
 
+  const { data: savedFilters } = await supabase.from('saved_filters').select('id, name, query').order('created_at');
   const canAssign = session.can('orders.assign');
   const [agentsRes, productsRes, wilayasRes, providersRes] = await Promise.all([
     session.can('orders.view_all') ? supabase.from('staff_directory').select('id, full_name, role, is_active').order('full_name') : Promise.resolve({ data: [] }),
@@ -81,6 +82,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         products={productsRes.data ?? []}
         wilayas={(wilayasRes.data ?? []).map((w) => ({ code: w.code, name: locale === 'ar' ? w.name_ar : w.name_fr }))}
         showAgentFilter={session.can('orders.view_all')}
+        savedFilters={savedFilters ?? []}
         canExport={session.can('orders.export')}
       />
       <Card className="mt-4 overflow-hidden">
