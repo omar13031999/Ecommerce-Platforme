@@ -111,8 +111,8 @@ ECOTRACK order cannot be deleted). `maystro.live.ts` and `stock.live.ts` are rea
   be **Maystro product uuids** → "Lier les produits" dialog (`product_provider_links`); no auto-creation by default.
   Create `POST /stores/orders/` (source 4, delivery_type 1/2), tracking = `display_id`, status by `display_id`, 18
   documented status codes mapped (code 33 seen live, undocumented → stored unmapped), base64 webhooks as trigger.
-* Verified **read-only** on the live store (token OK, 188 products, 1004 orders). Config JSON: `{"store_id": "<store
-  uuid>"}`. **Order creation not yet tested live** (owner approval pending).
+* Verified on the live store: token, 188 products, 1004 orders, and (owner-approved) **create → status → lookup → cancel**
+  of one test order (`tests/live/maystro-order.live.ts`). Config JSON: `{"store_id": "<store uuid>"}`.
 
 **Other**: products (cost history, bulk price import with SKU families, carrier stock columns), finance (profit maturity,
 COD reconciliation), expenses (recurring), Meta Ads, analytics, team & permissions, notifications, audit log (incl.
@@ -123,8 +123,8 @@ deletions), owner account page (password change), branded UI (dark sidebar, pill
 ## 4. Où en est-on (open items)
 
 1. **Maystro**: owner must (a) make sure the provider type is *Maystro Delivery* (0025 converts a REST one named
-   Maystro), (b) press *Tester*, (c) link products in *Lier les produits*. A live test order (create → read → cancel with
-   `PATCH /shared/status/{id}/ {"status":50,"abort_reason":21}`) needs the owner's **explicit** approval — it was not run.
+   Maystro), (b) press *Tester*, (c) link products in *Lier les produits*. Live create/cancel was verified (test order
+   37328030000013, cancelled with `PATCH /shared/status/{id}/ {"status":50,"abort_reason":21}`).
 2. **Navex auto-ship**: first real submission after commit `7f6d486` must be checked in the Navex panel (expected to leave
    "Colis prêt"; exact label of the next state not confirmed).
 3. **AI extraction**: confirm on the first new sheet row (cron logs: `[cron] sheets <id>: {"ai_rows":…}`).
