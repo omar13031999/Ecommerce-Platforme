@@ -7,7 +7,8 @@ import { httpJson } from '@/lib/integrations/http';
 import type { AdapterContext, ShipmentInput } from '@/lib/integrations/delivery/types';
 
 // LIVE test against the Navex ECOTRACK account (token injected by the network proxy).
-const ctx = (config: Record<string, unknown> = {}): AdapterContext => ({ baseUrl: 'https://navexdelivery.ecotrack.dz', credentials: { api_key: process.env.ECOTRACK_TOKEN ?? 'proxy-injected' }, config });
+// auto_validate: false — test orders must stay deletable (a shipped order cannot be deleted).
+const ctx = (config: Record<string, unknown> = {}): AdapterContext => ({ baseUrl: 'https://navexdelivery.ecotrack.dz', credentials: { api_key: process.env.ECOTRACK_TOKEN ?? 'proxy-injected' }, config: { auto_validate: false, ...config } });
 const base: ShipmentInput = {
   reference: '', orderId: 'x', orderReference: 0, customerName: 'TEST CLAUDE NE PAS EXPEDIER', firstName: 'TEST', lastName: 'CLAUDE',
   phone: '0555000001', phone2: null, wilayaCode: 16, wilayaName: 'Alger', commune: 'Bab Ezzouar', address: 'Test adresse',

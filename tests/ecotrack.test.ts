@@ -138,4 +138,17 @@ describe('ECOTRACK alignment helpers', () => {
     await ecotrackAdapter.createShipment!(ctx({ use_stock: false }), { ...input, products: [{ name: 'Tn Gold 41', quantity: 1, unitPrice: 1, sku: 'TG41' }] });
     expect(call(f, 1).url.searchParams.get('stock')).toBeNull();
   });
+
+  it('ships right after creation by default (no pickup for stock orders), unless disabled', async () => {
+    const f = vi.fn(async (u: URL) => (String(u).includes('/valid/order') ? json({ success: true }) : json({ success: true, tracking: 'T9' })));
+    vi.stubGlobal('fetch', f);
+    await ecotrackAdapter.createShipment!(ctx(), { ...input, products: [{ name: 'Tn Gold 41', quantity: 1, unitPrice: 1, sku: 'TG41' }] });
+    expect(call(f, 1).url.pathname).toBe('/api/v1/valid/order');
+    expect(call(f, 1).url.searchParams.get('ask_collection')).toBe('0');
+    await ecotrackAdapter.createShipment!(ctx(), input);
+    expect(call(f, 3).url.searchParams.get('ask_collection')).toBe('1');
+    f.mockClear();
+    await ecotrackAdapter.createShipment!(ctx({ auto_validate: false }), input);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
 });

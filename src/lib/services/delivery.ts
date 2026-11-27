@@ -134,6 +134,14 @@ export async function submitOrder(orderId: string, providerId: string, actorId: 
       p_request: input as unknown as object, p_response: (res.raw ?? {}) as object, p_actor: actorId,
     });
     if (error) throw error;
+    // ECOTRACK: the parcel was created but automatic shipping ("Expédier") failed -> say so on the order.
+    const validation = (res.raw as { validation?: { error?: string; success?: boolean } } | null)?.validation;
+    if (provider.code === 'ecotrack' && validation && (validation.error || validation.success === false)) {
+      await db.from('order_notes').insert({
+        order_id: orderId, author_id: actorId,
+        body: `Colis ${res.trackingNumber} créé chez ${provider.name}, mais l'expédition automatique a échoué (${validation.error ?? 'refusée'}). Cliquez « Expédier » dans le panneau ${provider.name}.`.slice(0, 4000),
+      });
+    }
     return { orderId, ok: true, tracking: res.trackingNumber };
   } catch (e) {
     const pe = e instanceof ProviderError ? e : new ProviderError('ambiguous', (e as Error).message);

@@ -24,7 +24,9 @@ import type { DeliveryStatus } from '@/lib/domain/statuses';
  * API, never from the unauthenticated body). Raw payloads stay in webhook_inbox.
  *
  * Optional provider config (JSON):
- *   { "auto_validate": false, "ask_collection": true, "operation_type": 1, "use_stock": false }
+ *   { "auto_validate": true, "ask_collection": <auto>, "operation_type": 1, "use_stock": <auto> }
+ * auto_validate (default true): the order is shipped ("Expédier", valid/order) right after creation;
+ * ask_collection defaults to false for stock orders (goods already in the warehouse), true otherwise.
  * use_stock: the parcel is prepared from the stock held by the company
  * (stock=1, produit = product references, quantite = quantities). Default:
  * automatic when every order line is matched to a product with a SKU.
@@ -220,7 +222,8 @@ export const ecotrackAdapter: DeliveryAdapter = {
       type: c.operation_type ?? 1,
       stop_desk: input.deliveryType === 'stopdesk' ? 1 : 0,
     };
-    if (stockMode(c, input)) {
+    const usesStock = stockMode(c, input);
+    if (usesStock) {
       const missing = input.products.filter((p) => !p.sku?.trim());
       if (missing.length) throw new ProviderError('validation', `missing_sku: ${missing.map((p) => p.name).join(', ')}`.slice(0, 300));
       query.stock = 1;
@@ -243,13 +246,16 @@ export const ecotrackAdapter: DeliveryAdapter = {
     const tracking = data?.tracking ? String(data.tracking) : null;
     if (!tracking) throw new ProviderError('ambiguous', 'tracking_not_found_in_response', 200, data);
 
+    // Ship ("Expédier") right away so the parcel leaves "Colis prêt" for processing.
+    // Stock orders are prepared in the company's warehouse: no pickup request.
     let validation: unknown = null;
-    if (c.auto_validate) {
+    if (c.auto_validate !== false) {
+      const askCollection = c.ask_collection ?? !usesStock;
       // The parcel exists at this point: a failed validation must not fail the submission.
       try {
         ({ data: validation } = await httpJson({
           url: url(ctx, '/api/v1/valid/order'), method: 'POST', headers: auth(ctx),
-          query: { tracking, ask_collection: c.ask_collection === false ? 0 : 1 },
+          query: { tracking, ask_collection: askCollection ? 1 : 0 },
         }));
       } catch (e) {
         validation = { error: (e as Error).message };
