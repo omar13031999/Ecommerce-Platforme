@@ -120,7 +120,7 @@ export async function importDeliveryStatuses(formData: FormData) {
 /** Provider credential/config management (integrations.manage). */
 const providerSchema = z.object({
   id: z.guid().optional(),
-  code: z.enum(['manual', 'rest', 'ecotrack']),
+  code: z.enum(['manual', 'rest', 'ecotrack', 'maystro']),
   name: z.string().trim().min(1).max(80),
   is_active: z.boolean(),
   base_url: z.string().trim().url().or(z.literal('')).optional(),

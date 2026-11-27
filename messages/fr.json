@@ -782,7 +782,8 @@
     "googleOptional": "Connexion Google facultative : vous pouvez importer via un lien de partage public. Pour un accès privé, configurez GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET.",
     "aiExtract": "Extraction intelligente par IA (recommandé si les colonnes sont mélangées)",
     "aiExtractHelp": "L'IA lit chaque nouvelle ligne en entier et retrouve le nom, le téléphone, la wilaya, la commune, l'adresse, les produits et le total, même si les colonnes sont mélangées. Rien n'est inventé : ce qui manque est signalé « à vérifier ». La correspondance des colonnes devient facultative.",
-    "aiNotConfigured": "IA non disponible : ni clé ANTHROPIC_API_KEY, ni Vercel AI Gateway. La correspondance des colonnes est utilisée."
+    "aiNotConfigured": "IA non disponible : ni clé ANTHROPIC_API_KEY, ni Vercel AI Gateway. La correspondance des colonnes est utilisée.",
+    "adapter_maystro": "Maystro Delivery"
   },
   "notifications": {
     "title": "Notifications",

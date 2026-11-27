@@ -33,6 +33,14 @@ Dedicated adapter (`src/lib/integrations/delivery/adapters/ecotrack.ts`), writte
 * Not covered: labels (PDF requires the token; download from the panel), per-parcel fees (use *Tarifs transporteur*
   or the COD statement import).
 
+## Maystro Delivery
+
+Dedicated adapter (`src/lib/integrations/delivery/adapters/maystro.ts`) from the official documentation
+(https://maystro.gitbook.io/maystro-delivery-documentation): `Authorization: Token <store token>`,
+commune ids from `/shared/communes/`, products by Maystro uuid (matched by SKU = Maystro `product_id`, else by name,
+created in the store when `store_id` is known), orders `POST /stores/orders/` (source 4, delivery_type 1/2),
+status by `display_id`, base64 webhooks used as a trigger. Not yet verified against a live account.
+
 ## Why there is no Yalidine / ZR Express / … adapter yet (other providers)
 
 The brief requires using official provider documentation and never inventing endpoints, authentication or payload
