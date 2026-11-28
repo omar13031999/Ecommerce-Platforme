@@ -5,6 +5,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { AlertTriangle, ArrowLeft, Copy, ExternalLink, PackageX } from 'lucide-react';
 import { requirePage } from '@/lib/auth/session';
 import { createClient } from '@/lib/supabase/server';
+import { loadCommunes } from '@/lib/communes-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -48,7 +49,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     canFinance ? supabase.from('order_profit').select('*').eq('order_id', id).maybeSingle() : Promise.resolve({ data: null }),
     supabase.from('products').select('id, name, sku, selling_price').eq('is_archived', false).order('name'),
     supabase.from('wilayas').select('code, name_fr, name_ar').order('code'),
-    supabase.from('communes').select('wilaya_code, name, has_stop_desk').eq('is_active', true).order('name').range(0, 4999),
+    loadCommunes(supabase),
   ]);
   const { data: lastShipment } = order.delivery_status === 'submission_failed' || order.delivery_status === 'pending_submission'
     ? await supabase.from('delivery_shipments').select('status, error_code, error_message, attempt_count, updated_at').eq('order_id', id)
