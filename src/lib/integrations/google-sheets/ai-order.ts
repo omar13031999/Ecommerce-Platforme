@@ -58,6 +58,6 @@ export function aiRowToOrder(ai: AiRow, externalId: string, rowNumber: number, c
     items,
     row_numbers: [rowNumber],
     needs_review: needsReview,
-    review_reason: needsReview ? `${reviewReason(missing)} — ligne d'origine : ${rawRowText(cells)}`.slice(0, 1000) : null,
+    review_reason: needsReview ? `Extraction IA — ${reviewReason(missing)} — ligne d'origine : ${rawRowText(cells)}`.slice(0, 1000) : null,
   };
 }

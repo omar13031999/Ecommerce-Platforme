@@ -115,38 +115,90 @@ export async function extractRowsWithAI(
     const batch = rows.slice(i, i + ROWS_PER_REQUEST);
     const input = batch.map((r) => ({ row: r.row, cells: Object.fromEntries(Object.entries(r.cells).filter(([, v]) => String(v ?? '').trim())) }));
     try {
-      const messages: Anthropic.MessageParam[] = [{ role: 'user', content: `Extract these ${input.length} rows:\n${JSON.stringify(input)}` }];
-      const response = ai.direct
-        // Direct API: server-side refusal fallback (AI Gateway has its own provider failover).
-        ? await ai.client.beta.messages.parse({
-          model: ai.model, max_tokens: 16000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', system,
-          output_config: { effort: 'low', format: betaZodOutputFormat(ExtractionResult) }, messages,
-        })
-        : await ai.client.messages.parse({
-          model: ai.model, max_tokens: 16000, system,
-          output_config: { effort: 'low', format: zodOutputFormat(ExtractionResult) }, messages,
-        });
-      if (response.stop_reason === 'refusal') {
+      const out = await callModel(ai, system, `Extract these ${input.length} rows:\n${JSON.stringify(input)}`);
+      if (out === 'refusal') {
         errors.push(`refusal rows ${batch[0]!.row}-${batch[batch.length - 1]!.row}`);
         continue;
       }
       const wanted = new Set(batch.map((r) => r.row));
-      for (const o of response.parsed_output?.orders ?? []) if (wanted.has(o.row)) results.set(o.row, o);
+      for (const o of out.orders) if (wanted.has(o.row)) results.set(o.row, o);
     } catch (e) {
-      if (e instanceof Anthropic.AuthenticationError) {
-        errors.push('ai_invalid_api_key');
-        break;
-      }
-      if (e instanceof Anthropic.APIError && (e.status === 402 || /credit|verification|budget/i.test(e.message))) {
-        errors.push(`ai_gateway_credits: ${e.message}`.slice(0, 200)); // no free credits unlocked / exhausted
-        break;
-      }
-      if (e instanceof Anthropic.RateLimitError) {
-        errors.push('ai_rate_limited');
-        break; // remaining rows are retried on the next sync
-      }
-      errors.push(e instanceof Anthropic.APIError ? `ai_api_error ${e.status ?? ''}: ${e.message}`.slice(0, 200) : `ai_error: ${(e as Error).message}`.slice(0, 200));
+      const err = describeError(e);
+      errors.push(err);
+      if (/^ai_(invalid_api_key|gateway_credits|rate_limited)/.test(err)) break; // remaining rows retried next sync
     }
   }
   return { results, errors };
+}
+
+type AiConn = NonNullable<Awaited<ReturnType<typeof aiClient>>>;
+
+/** First JSON object in a text answer (tolerates ```json fences or a sentence around it). */
+export function parseJsonAnswer(text: string): z.infer<typeof ExtractionResult> | null {
+  const a = text.indexOf('{');
+  const b = text.lastIndexOf('}');
+  if (a < 0 || b <= a) return null;
+  try {
+    const r = ExtractionResult.safeParse(JSON.parse(text.slice(a, b + 1)));
+    return r.success ? r.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Structured output first; if the endpoint rejects that request shape (some
+ * gateway/provider routes do not accept output_config), ask for plain JSON text
+ * and validate it with the same schema.
+ */
+async function callModel(ai: AiConn, system: Anthropic.TextBlockParam[], userText: string): Promise<z.infer<typeof ExtractionResult> | 'refusal'> {
+  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: userText }];
+  try {
+    const response = ai.direct
+      // Direct API: server-side refusal fallback (AI Gateway has its own provider failover).
+      ? await ai.client.beta.messages.parse({
+        model: ai.model, max_tokens: 16000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', system,
+        output_config: { format: betaZodOutputFormat(ExtractionResult) }, messages,
+      })
+      : await ai.client.messages.parse({ model: ai.model, max_tokens: 16000, system, output_config: { format: zodOutputFormat(ExtractionResult) }, messages });
+    if (response.stop_reason === 'refusal') return 'refusal';
+    if (response.parsed_output) return response.parsed_output;
+  } catch (e) {
+    if (!(e instanceof Anthropic.BadRequestError || e instanceof Anthropic.NotFoundError || e instanceof Anthropic.UnprocessableEntityError
+      || (e instanceof Error && !(e instanceof Anthropic.APIError)))) throw e;
+    console.warn('[ai] structured output rejected, retrying as plain JSON:', describeError(e));
+  }
+  const response = await ai.client.messages.create({
+    model: ai.model, max_tokens: 16000, system,
+    messages: [{ role: 'user', content: `${userText}\n\nAnswer with ONLY a JSON object {"orders": [...]} following the rules, no other text.` }],
+  });
+  if (response.stop_reason === 'refusal') return 'refusal';
+  const text = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
+  const parsed = parseJsonAnswer(text);
+  if (!parsed) throw new Error(`invalid_json_answer: ${text.slice(0, 120)}`);
+  return parsed;
+}
+
+function describeError(e: unknown): string {
+  if (e instanceof Anthropic.AuthenticationError) return `ai_invalid_api_key: ${e.message}`.slice(0, 200);
+  if (e instanceof Anthropic.RateLimitError) return 'ai_rate_limited';
+  if (e instanceof Anthropic.APIError && (e.status === 402 || /credit|verification|budget|payment/i.test(e.message))) {
+    return `ai_gateway_credits: ${e.message}`.slice(0, 200);
+  }
+  if (e instanceof Anthropic.APIError) return `ai_api_error ${e.status ?? ''}: ${e.message}`.slice(0, 200);
+  return `ai_error: ${(e as Error)?.message ?? String(e)}`.slice(0, 200);
+}
+
+/** One tiny extraction to tell, in the logs, whether the AI path works in this deployment. */
+export async function aiSelfTest(): Promise<string> {
+  const ai = await aiClient();
+  if (!ai) return 'ai_not_configured (no key, no OIDC token)';
+  try {
+    const out = await callModel(ai, [{ type: 'text', text: SYSTEM }], 'Extract these 1 rows:\n[{"row":1,"cells":{"Nom":"0555 12 34 56","Téléphone":"Karim","Adresse":"Alger - Kouba"}}]');
+    if (out === 'refusal') return `refusal (${ai.model})`;
+    const o = out.orders[0];
+    return `ok via ${ai.direct ? 'anthropic' : 'gateway'} ${ai.model}: phone=${o?.phone} name=${o?.customer_name} wilaya=${o?.wilaya_code}`;
+  } catch (e) {
+    return `${describeError(e)} (via ${ai.direct ? 'anthropic' : 'gateway'} ${ai.model})`;
+  }
 }

@@ -81,6 +81,17 @@ async function aiOrders(src: SheetSource, header: string[], rows: string[][], he
     for (const o of data ?? []) existing.add(o.external_id as string);
   }
   const fresh = candidates.filter((c) => !existing.has(c.externalId)).slice(0, AI_ROWS_PER_SYNC);
+  // Orders imported "scattered" (raw row / wrong columns) that nobody worked on yet are re-read by the AI.
+  const redo = new Set<string>();
+  if (fresh.length < AI_ROWS_PER_SYNC && existing.size) {
+    const { data } = await db.from('orders').select('external_id')
+      .eq('source', 'google_sheets').eq('source_id', src.id).eq('needs_review', true)
+      .eq('confirmation_status', 'new').eq('delivery_status', 'not_submitted')
+      .not('review_reason', 'like', 'Extraction IA%')
+      .order('created_at', { ascending: false }).limit(AI_ROWS_PER_SYNC - fresh.length);
+    for (const o of data ?? []) redo.add(o.external_id as string);
+    fresh.push(...candidates.filter((c) => redo.has(c.externalId)));
+  }
 
   const { data: catalog } = await db.from('products').select('name, sku').eq('is_archived', false).order('name').limit(500);
   const { results, errors: aiErrors } = fresh.length
@@ -88,14 +99,18 @@ async function aiOrders(src: SheetSource, header: string[], rows: string[][], he
     : { results: new Map(), errors: [] as string[] };
 
   const orders: ExternalOrder[] = [];
+  const reextract: ExternalOrder[] = [];
   const errors: { row: number; external_id: string | null; error: string }[] = [];
   for (const c of fresh) {
     const ai = results.get(c.rowNumber);
     const orderedAt = dateCol >= 0 ? parseSheetDate(String(c.row[dateCol] ?? ''), src.options.date_format) : null;
     if (ai) {
-      orders.push(aiRowToOrder(ai, c.externalId, c.rowNumber, c.cells, orderedAt));
+      const order = aiRowToOrder(ai, c.externalId, c.rowNumber, c.cells, orderedAt);
+      if (redo.has(c.externalId)) reextract.push(order);
+      else orders.push(order);
       continue;
     }
+    if (redo.has(c.externalId)) continue; // already in the platform as it was
     // AI unavailable for this row: column mapping, else import raw for the confirmers.
     const viaMapping = Object.keys(src.column_mapping).length
       ? rowsToOrders(header, [c.row], src.column_mapping, src.options, c.rowNumber).orders[0]
@@ -107,8 +122,8 @@ async function aiOrders(src: SheetSource, header: string[], rows: string[][], he
   }
   if (aiErrors.length) errors.push(...aiErrors.slice(0, 5).map((e) => ({ row: 0, external_id: null, error: e })));
   return {
-    orders, errors,
-    stats: { ai_rows: fresh.length, ai_extracted: results.size, ai_pending: Math.max(0, candidates.filter((c) => !existing.has(c.externalId)).length - fresh.length), unchanged_rows: existing.size, ...(aiErrors[0] ? { ai_error: aiErrors[0].slice(0, 200) } : {}) },
+    orders, errors, reextract,
+    stats: { ai_rows: fresh.length, ai_redo: redo.size, ai_extracted: results.size, ai_pending: Math.max(0, candidates.filter((c) => !existing.has(c.externalId)).length - fresh.length), unchanged_rows: existing.size, ...(aiErrors[0] ? { ai_error: aiErrors[0].slice(0, 200) } : {}) },
   };
 }
 
@@ -124,11 +139,13 @@ export async function syncSheetSource(sourceId: string, trigger: 'schedule' | 'm
     stats.rows = rows.length;
     let orders: ExternalOrder[];
     let errors: { row: number; external_id: string | null; error: string }[];
+    let reextract: ExternalOrder[] = [];
     const { aiExtractionAvailable } = await import('@/lib/integrations/google-sheets/ai-extract');
     if (src.options.ai_extract && aiExtractionAvailable()) {
       const r = await aiOrders(src, header, rows, headerRow);
       orders = r.orders;
       errors = r.errors;
+      reextract = r.reextract;
       Object.assign(stats, r.stats);
     } else {
       const r = rowsToOrders(header, rows, src.column_mapping, src.options, headerRow + 1);
@@ -152,6 +169,14 @@ export async function syncSheetSource(sourceId: string, trigger: 'schedule' | 'm
       const r = data as { action: 'created' | 'updated' | 'unchanged'; unmatched?: boolean };
       stats[r.action] = (stats[r.action] ?? 0) + 1;
       if (r.unmatched) stats.unmatched = (stats.unmatched ?? 0) + 1;
+    }
+    for (const order of reextract) {
+      const { data, error: upErr } = await db.rpc('ai_reimport_order', { p_source_id: src.id, p_order: order });
+      if (upErr) {
+        rowErrors.push({ row_number: order.row_numbers[0] ?? null, external_id: order.external_id, error: upErr.message, raw: order });
+        continue;
+      }
+      if ((data as { action: string }).action === 'reextracted') stats.reextracted = (stats.reextracted ?? 0) + 1;
     }
     stats.errors = rowErrors.length;
     if (rowErrors.length) {

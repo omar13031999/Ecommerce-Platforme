@@ -39,7 +39,24 @@ async function handle(req: Request) {
       else console.log(line);
     }
   }
+  await logAiSelfTest();
   return NextResponse.json({ ok: results.every((r) => r.ok), results });
+}
+
+let aiChecked = false;
+/** Once per server instance: tells in the logs whether AI extraction works here, and why not. */
+async function logAiSelfTest() {
+  if (aiChecked) return;
+  aiChecked = true;
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const { data } = await createAdminClient().from('sheet_sources').select('id').eq('options->>ai_extract', 'true').limit(1);
+    if (!data?.length) return;
+    const { aiSelfTest } = await import('@/lib/integrations/google-sheets/ai-extract');
+    console.log(`[ai] self-test: ${await aiSelfTest()}`);
+  } catch (e) {
+    console.error('[ai] self-test crashed:', (e as Error).message);
+  }
 }
 
 export const GET = handle;

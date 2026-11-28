@@ -22,7 +22,7 @@ describe('AI row -> order', () => {
       total_amount: 3900, delivery_fee: 400, notes: null, missing: ['customer_name', 'wilaya'],
     }, 'auto-2', 3, cells, null);
     expect(o.needs_review).toBe(true);
-    expect(o.review_reason).toMatch(/^Import incomplet/);
+    expect(o.review_reason).toMatch(/^Extraction IA — Import incomplet/);
     expect(o.review_reason).toContain('téléphone');
     expect(o.review_reason).toContain("ligne d'origine : Nom: 0555 12 34 56 Karim");
     expect(o.items[0]!.unit_price).toBe(3500); // (total - delivery fee) / quantity
@@ -60,7 +60,7 @@ describe('AI extraction call', () => {
     const { extractRowsWithAI } = await import('@/lib/integrations/google-sheets/ai-extract');
     const r = await extractRowsWithAI([{ row: 2, cells }], []);
     expect(r.results.size).toBe(0);
-    expect(r.errors).toEqual(['ai_invalid_api_key']);
+    expect(r.errors[0]).toMatch(/^ai_invalid_api_key/);
   });
 });
 
@@ -104,5 +104,28 @@ describe('AI extraction through Vercel AI Gateway', () => {
     const { extractRowsWithAI } = await import('@/lib/integrations/google-sheets/ai-extract');
     const r = await extractRowsWithAI([{ row: 2, cells: { A: 'x' } }], []);
     expect(r.errors[0]).toMatch(/^ai_gateway_credits|^ai_api_error/);
+  });
+
+  it('falls back to plain JSON when the structured-output request is rejected', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'A_REMPLACER');
+    vi.stubEnv('AI_GATEWAY_API_KEY', 'gw-test');
+    const answer = { orders: [{ row: 2, customer_name: 'Karim', phone: '0555123456', phone2: null, wilaya_code: 16, commune: 'Kouba', address: null,
+      delivery_type: 'home', products: [{ name: 'Montre', sku: null, quantity: 1, unit_price: 4500 }], total_amount: null, delivery_fee: null, notes: null, missing: [] }] };
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      if (body.output_config) {
+        return new Response(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'output_config: Extra inputs are not permitted' } }), { status: 400, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        id: 'msg_3', type: 'message', role: 'assistant', model: 'm', stop_reason: 'end_turn', stop_sequence: null,
+        content: [{ type: 'text', text: '```json\n' + JSON.stringify(answer) + '\n```' }], usage: { input_tokens: 1, output_tokens: 1 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { extractRowsWithAI } = await import('@/lib/integrations/google-sheets/ai-extract');
+    const r = await extractRowsWithAI([{ row: 2, cells: { Nom: '0555123456', Tel: 'Karim' } }], []);
+    expect(r.errors).toEqual([]);
+    expect(r.results.get(2)).toMatchObject({ phone: '0555123456', customer_name: 'Karim', wilaya_code: 16 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
