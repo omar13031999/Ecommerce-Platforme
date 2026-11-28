@@ -108,7 +108,7 @@ async function aiOrders(src: SheetSource, header: string[], rows: string[][], he
   if (aiErrors.length) errors.push(...aiErrors.slice(0, 5).map((e) => ({ row: 0, external_id: null, error: e })));
   return {
     orders, errors,
-    stats: { ai_rows: fresh.length, ai_extracted: results.size, ai_pending: Math.max(0, candidates.filter((c) => !existing.has(c.externalId)).length - fresh.length), unchanged_rows: existing.size },
+    stats: { ai_rows: fresh.length, ai_extracted: results.size, ai_pending: Math.max(0, candidates.filter((c) => !existing.has(c.externalId)).length - fresh.length), unchanged_rows: existing.size, ...(aiErrors[0] ? { ai_error: aiErrors[0].slice(0, 200) } : {}) },
   };
 }
 
