@@ -151,4 +151,16 @@ describe('ECOTRACK alignment helpers', () => {
     await ecotrackAdapter.createShipment!(ctx({ auto_validate: false }), input);
     expect(f).toHaveBeenCalledTimes(1);
   });
+
+  it('recalls a parcel with delete/order, and reports a refusal as validation', async () => {
+    const f = vi.fn(async () => json({ success: true }));
+    vi.stubGlobal('fetch', f);
+    await ecotrackAdapter.cancelShipment!(ctx(), { trackingNumber: 'ECL9', providerShipmentId: null });
+    expect(call(f).url.pathname).toBe('/api/v1/delete/order');
+    expect(call(f).init.method).toBe('DELETE');
+    expect(call(f).url.searchParams.get('tracking')).toBe('ECL9');
+    vi.stubGlobal('fetch', vi.fn(async () => json({ success: false, message: 'Commande déjà expédiée' })));
+    await expect(ecotrackAdapter.cancelShipment!(ctx(), { trackingNumber: 'ECL9', providerShipmentId: null })).rejects.toMatchObject({ kind: 'validation' });
+  });
 });
+

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Ban, Check, Copy, PhoneMissed, PhoneOff, Send, Trash2 } from 'lucide-react';
+import { Ban, Check, Copy, PhoneMissed, PhoneOff, Send, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +14,7 @@ import { useAction } from '@/components/app/use-action';
 import { CONFIRMATION_STATUSES, DELIVERY_STATUSES, nextNoAnswer, type ConfirmationStatus } from '@/lib/domain/statuses';
 import {
   addOrderNote, assignOrders, autoAssignOrders, changeConfirmationStatus, matchOrderItem, resolveReview,
-  deleteOrders, setDeliveryManual, submitToDelivery, unblockPhone, updateOrderCustomer,
+  deleteOrders, recallFromCarrier, setDeliveryManual, submitToDelivery, unblockPhone, updateOrderCustomer,
 } from '@/lib/actions/orders';
 
 export function StatusActions({ orderId, status, version, isManager, beforeChange, confirmBlockers }: {
@@ -233,4 +233,52 @@ export function UnblockPhoneButton({ phone }: { phone: string }) {
   const t = useTranslations('orders');
   const { run, pending } = useAction();
   return <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => unblockPhone(phone), { success: t('unblock') })}>{t('unblock')}</Button>;
+}
+
+/** "Récupérer du transporteur": deletes the parcel at the carrier, then the order is editable again. */
+export function RecallButton({ orderId, providerName, tracking, isOwner }: { orderId: string; providerName: string | null; tracking: string | null; isOwner: boolean }) {
+  const t = useTranslations('orders');
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+
+  async function go(force: boolean) {
+    setBusy(true);
+    try {
+      const r = await recallFromCarrier({ orderId, force, note: note || undefined });
+      if (!r.ok) { toast.error(t('recallFailed')); return; }
+      const d = r.data!;
+      if (d.ok) {
+        toast.success(d.cancelledAtProvider ? t('recalledAtProvider', { provider: providerName ?? '' }) : t('recalled'));
+        setOpen(false);
+        router.refresh();
+        return;
+      }
+      setRefusal(d.error === 'recall_not_allowed' ? t('recallNotAllowed')
+        : d.error === 'provider_cannot_cancel' ? t('recallManualOnly', { provider: providerName ?? '' })
+        : `${t('recallRefused', { provider: providerName ?? '' })}${d.details ? ` (${d.details})` : ''}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setRefusal(null); }}>
+      <DialogTrigger asChild><Button size="sm" variant="outline"><Undo2 />{t('recall')}</Button></DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{t('recallTitle')}</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">{t('recallHelp', { provider: providerName ?? '', tracking: tracking ?? '—' })}</p>
+        <div className="grid gap-1"><Label>{t('recallReason')}</Label><Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></div>
+        {refusal ? (
+          <div className="grid gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-sm">
+            <p className="text-destructive">{refusal}</p>
+            {isOwner ? <Button size="sm" variant="destructive" disabled={busy} onClick={() => { if (confirm(t('recallForceConfirm', { provider: providerName ?? '' }))) void go(true); }}>{t('recallForce')}</Button> : <p className="text-xs text-muted-foreground">{t('recallAskOwner')}</p>}
+          </div>
+        ) : null}
+        <DialogFooter><Button disabled={busy} onClick={() => void go(false)}><Undo2 />{t('recall')}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }

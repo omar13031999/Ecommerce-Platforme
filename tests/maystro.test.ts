@@ -12,6 +12,16 @@ const input: ShipmentInput = {
 };
 
 describe('Maystro adapter (official docs)', () => {
+  it('cancels an order with the documented status change (50, store request)', async () => {
+    const f = vi.fn(async (_u: unknown, _i?: RequestInit) => json({ ok: true }));
+    vi.stubGlobal('fetch', f);
+    await maystroAdapter.cancelShipment!(ctx, { trackingNumber: '37328030000013', providerShipmentId: 'uuid-1' });
+    const [u, init] = f.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(String(u)).toBe('https://backend.maystro-delivery.com/api/shared/status/uuid-1/');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(String(init.body))).toEqual({ status: 50, abort_reason: 21 });
+  });
+
   it('creates an order with commune id, product uuid and Token auth', async () => {
     const calls: { url: string; init?: RequestInit }[] = [];
     vi.stubGlobal('fetch', vi.fn(async (u: URL, init?: RequestInit) => {

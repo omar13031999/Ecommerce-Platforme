@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { ConfirmationBadge, DeliveryBadge } from '@/components/app/status-badge';
 import { formatDZD, formatDateTime, type AppLocale } from '@/lib/format';
 import { isConfirmationStatus, isDeliveryStatus, type ConfirmationStatus, type DeliveryStatus } from '@/lib/domain/statuses';
-import { NoteForm, AssignControl, DeliveryControl, ReviewControl, ItemMatcher, DeleteOrderButton, UnblockPhoneButton } from './order-actions';
+import { NoteForm, AssignControl, DeliveryControl, ReviewControl, ItemMatcher, DeleteOrderButton, UnblockPhoneButton, RecallButton } from './order-actions';
 
 type Event = { id: number; actor_id: string | null; actor_label: string | null; event_type: string; field: string | null; old_value: string | null; new_value: string | null; note: string | null; metadata: Record<string, string>; created_at: string };
 
@@ -105,7 +105,12 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       </div>
 
       {!['not_submitted', 'submission_failed'].includes(order.delivery_status) ? (
-        <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">{t('orders.lockedDelivery')}</p>
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">
+          <span className="flex-1">{t('orders.lockedDelivery')}</span>
+          {['submitted', 'processing', 'ready_for_pickup', 'pending_submission'].includes(order.delivery_status) && (session.can('delivery.manage') || session.can('orders.manage')) ? (
+            <RecallButton orderId={order.id} providerName={provider?.name ?? null} tracking={order.tracking_number ?? null} isOwner={session.profile.role === 'admin'} />
+          ) : null}
+        </div>
       ) : null}
 
       {lastShipment && ['failed', 'unknown'].includes(lastShipment.status) ? (

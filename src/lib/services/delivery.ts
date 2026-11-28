@@ -308,3 +308,45 @@ export async function autoSubmitConfirmed(limit = 50) {
   const results = await submitOrders(orders.map((o) => o.id), value.default_provider_id, null, 'schedule');
   return { submitted: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length };
 }
+
+export const RECALLABLE: DeliveryStatus[] = ['submitted', 'processing', 'ready_for_pickup', 'pending_submission'];
+
+export type RecallResult =
+  | { ok: true; cancelledAtProvider: boolean }
+  | { ok: false; error: 'recall_not_allowed' | 'provider_refused_cancel' | 'provider_cannot_cancel' | 'provider_error'; details?: string };
+
+/**
+ * Takes an order back from the carrier before pickup so it can be edited and
+ * sent again. The parcel is deleted/cancelled at the carrier first (ECOTRACK
+ * delete/order, Maystro status 50); `force` skips that call when the owner has
+ * already cancelled it by hand in the carrier panel.
+ */
+export async function recallOrder(orderId: string, actorId: string, opts: { force?: boolean; note?: string | null } = {}): Promise<RecallResult> {
+  const db = createAdminClient();
+  const { data: order } = await db.from('orders').select('id, delivery_status, delivery_provider_id').eq('id', orderId).maybeSingle();
+  if (!order || !RECALLABLE.includes(order.delivery_status as DeliveryStatus)) return { ok: false, error: 'recall_not_allowed' };
+  const { data: sh } = await db.from('delivery_shipments').select('id, provider_id, tracking_number, provider_shipment_id')
+    .eq('order_id', orderId).eq('is_active', true).maybeSingle();
+
+  let cancelled = false;
+  if (!opts.force && sh?.tracking_number) {
+    const { adapter, ctx } = await loadProvider(sh.provider_id as string);
+    if (adapter.code !== 'manual') {
+      if (!adapter.cancelShipment) return { ok: false, error: 'provider_cannot_cancel' };
+      try {
+        await adapter.cancelShipment(ctx, { trackingNumber: sh.tracking_number as string, providerShipmentId: (sh.provider_shipment_id as string | null) ?? null });
+        cancelled = true;
+      } catch (e) {
+        const pe = e instanceof ProviderError ? e : null;
+        return { ok: false, error: pe && (pe.kind === 'validation' || pe.kind === 'not_found') ? 'provider_refused_cancel' : 'provider_error', details: (e as Error).message.slice(0, 300) };
+      }
+    }
+  } else if (!opts.force && order.delivery_status === 'pending_submission') {
+    // Submission outcome unknown: the parcel may exist at the carrier -> owner must check and force.
+    return { ok: false, error: 'provider_cannot_cancel' };
+  }
+
+  const { error } = await db.rpc('recall_shipment', { p_order_id: orderId, p_actor: actorId, p_note: opts.note ?? null, p_forced: Boolean(opts.force) });
+  if (error) throw error;
+  return { ok: true, cancelledAtProvider: cancelled };
+}

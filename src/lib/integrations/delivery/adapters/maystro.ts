@@ -209,6 +209,18 @@ export const maystroAdapter: DeliveryAdapter = {
     await get(ctx, '/stores/product/', { page: 1 });
   },
 
+  async cancelShipment(ctx, shipment) {
+    // Documented status change: 50 = cancelled, abort reason 21 (store request). Needs the order uuid.
+    const id = shipment.providerShipmentId ?? (await findByDisplayId(ctx, shipment.trackingNumber))?.id;
+    if (!id) throw new ProviderError('not_found', 'maystro_order_not_found');
+    try {
+      await httpJson({ url: `${base(ctx)}/shared/status/${id}/`, method: 'PATCH', headers: auth(ctx), json: { status: 50, abort_reason: 21 }, timeoutMs: 30000 });
+    } catch (e) {
+      if (e instanceof ProviderError && e.kind === 'validation') throw new ProviderError('validation', validationMessage(e.body, e.message), e.status, e.body);
+      throw e;
+    }
+  },
+
   async createShipment(ctx, input: ShipmentInput): Promise<CreateShipmentResult> {
     if (!input.wilayaCode || !input.commune) throw new ProviderError('validation', 'wilaya_commune_required');
     const commune = await maystroCommuneId(ctx, input.wilayaCode, input.commune);

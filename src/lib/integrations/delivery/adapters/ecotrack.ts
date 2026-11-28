@@ -264,6 +264,22 @@ export const ecotrackAdapter: DeliveryAdapter = {
     return { trackingNumber: tracking, providerReference: input.reference, labelUrl: null, raw: { create: data, validation } };
   },
 
+  async cancelShipment(ctx, shipment) {
+    // DELETE /api/v1/delete/order?tracking= — only possible while the parcel is not shipped/picked up.
+    let data: { success?: boolean; message?: string } | null;
+    try {
+      ({ data } = await httpJson<typeof data>({
+        url: url(ctx, '/api/v1/delete/order'), method: 'DELETE', headers: auth(ctx), query: { tracking: shipment.trackingNumber },
+      }));
+    } catch (e) {
+      if (e instanceof ProviderError && (e.kind === 'validation' || e.kind === 'not_found')) {
+        throw new ProviderError('validation', validationMessage(e.body, e.message), e.status, e.body);
+      }
+      throw e;
+    }
+    if (data?.success === false) throw new ProviderError('validation', data.message ?? 'delete_refused', 200, data);
+  },
+
   async findShipmentByReference(ctx, reference) {
     // No search-by-reference endpoint: scan recent in-process orders (40 per page).
     const start = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);

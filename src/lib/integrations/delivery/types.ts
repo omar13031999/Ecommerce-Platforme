@@ -84,6 +84,12 @@ export interface DeliveryAdapter {
   };
   /** Provider status (normalised lower-case) -> internal status. */
   statusMap: Record<string, DeliveryStatus>;
+  /**
+   * Cancels / deletes a parcel at the provider so the order can be edited and
+   * sent again. Throws ProviderError('validation') when the provider refuses
+   * (parcel already picked up / shipped).
+   */
+  cancelShipment?(ctx: AdapterContext, shipment: { trackingNumber: string; providerShipmentId: string | null }): Promise<void>;
   /** Returns missing/invalid field codes; empty array when valid. */
   validate(input: ShipmentInput): string[];
   testConnection?(ctx: AdapterContext): Promise<void>;

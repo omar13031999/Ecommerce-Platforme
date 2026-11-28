@@ -347,7 +347,20 @@
     "block": "Bloquer le numéro",
     "blockReason": "Raison du blocage (facultatif)",
     "blockedDone": "{count} numéro(s) ajouté(s) à la liste noire",
-    "unblock": "Débloquer"
+    "unblock": "Débloquer",
+    "recall": "Récupérer du transporteur",
+    "recallTitle": "Récupérer la commande",
+    "recallHelp": "Le colis {tracking} sera supprimé chez {provider}, puis la commande revient dans « Confirmées à envoyer » : vous pourrez la modifier et la renvoyer. Possible seulement tant que le colis n'est pas ramassé.",
+    "recallReason": "Raison (optionnel)",
+    "recalled": "Commande récupérée : elle est modifiable.",
+    "recalledAtProvider": "Colis supprimé chez {provider} : la commande est modifiable.",
+    "recallFailed": "Récupération impossible.",
+    "recallNotAllowed": "Le colis est déjà ramassé ou en route : il ne peut plus être récupéré.",
+    "recallRefused": "{provider} refuse de supprimer le colis (déjà expédié ou ramassé ?)",
+    "recallManualOnly": "La suppression automatique n'est pas possible pour {provider} : annulez le colis dans le panneau {provider}.",
+    "recallForce": "J'ai annulé le colis dans le panneau — récupérer quand même",
+    "recallForceConfirm": "Confirmez-vous avoir annulé ce colis dans le panneau {provider} ? Sinon il sera livré ET renvoyé en double.",
+    "recallAskOwner": "Demandez au propriétaire d'annuler le colis dans le panneau du transporteur."
   },
   "deliveryPage": {
     "title": "Livraison",

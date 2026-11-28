@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireUser } from '@/lib/auth/session';
 import { AppError, fromDbError, runAction } from '@/lib/errors';
 import { CONFIRMATION_STATUSES, DELIVERY_STATUSES } from '@/lib/domain/statuses';
-import { submitOrders, type SubmitResult } from '@/lib/services/delivery';
+import { recallOrder, submitOrders, type RecallResult, type SubmitResult } from '@/lib/services/delivery';
 
 const uuid = z.guid();
 const uuids = z.array(uuid).min(1).max(500);
@@ -271,5 +271,16 @@ export async function deleteOrderFilter(id: string) {
     const supabase = await createClient();
     const { error } = await supabase.from('saved_filters').delete().eq('id', uuid.parse(id));
     if (error) throw fromDbError(error);
+  });
+}
+
+/** Takes a sent order back from the carrier (before pickup) to edit it and send it again. */
+export async function recallFromCarrier(input: { orderId: string; force?: boolean; note?: string }) {
+  return runAction(async (): Promise<RecallResult> => {
+    const s = await requireUser('delivery.manage', 'orders.manage');
+    const p = z.object({ orderId: uuid, force: z.boolean().default(false), note: z.string().trim().max(500).optional() }).parse(input);
+    // Forcing skips the carrier: only the owner, who has checked the carrier panel.
+    if (p.force && s.profile.role !== 'admin') throw new AppError('forbidden', 403);
+    return recallOrder(p.orderId, s.userId, { force: p.force, note: p.note ?? null });
   });
 }
