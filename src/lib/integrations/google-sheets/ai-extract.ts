@@ -16,6 +16,18 @@ const ROWS_PER_REQUEST = 15;
 const GATEWAY_URL = 'https://ai-gateway.vercel.sh';
 /** Default model through Vercel AI Gateway (no key needed on Vercel; cheapest Claude with structured output). */
 const GATEWAY_DEFAULT_MODEL = 'anthropic/claude-haiku-5.5';
+/**
+ * Tried in order when the gateway refuses a model for this team ("Free tier
+ * users do not have access to this model"): the free AI Gateway tier only
+ * serves some models. The first one that answers is remembered for the process.
+ */
+const GATEWAY_FALLBACK_MODELS = [
+  'google/gemini-3.5-flash-lite', 'google/gemini-2.5-flash-lite', 'openai/gpt-5-mini', 'openai/gpt-5-nano',
+  'deepseek/deepseek-v4-flash', 'anthropic/claude-haiku-4.5', 'reflection/beam-free', 'nvidia/nemotron-3.5-lightning-free',
+];
+let workingGatewayModel: string | null = null;
+const modelRefused = (e: unknown) => e instanceof Anthropic.APIError && (e.status === 403 || e.status === 404)
+  && /do not have access to this model|model.*not (found|available|supported)|not allowed/i.test(e.message);
 /** Default model with a direct Anthropic API key. */
 const DIRECT_DEFAULT_MODEL = 'claude-opus-5-5';
 
@@ -45,7 +57,7 @@ async function aiClient(): Promise<{ client: Anthropic; model: string; direct: b
     }
   }
   if (!token) return null;
-  return { client: new Anthropic({ apiKey: token, baseURL: GATEWAY_URL }), model: process.env.AI_EXTRACT_MODEL?.trim() || GATEWAY_DEFAULT_MODEL, direct: false };
+  return { client: new Anthropic({ apiKey: token, baseURL: GATEWAY_URL }), model: process.env.AI_EXTRACT_MODEL?.trim() || workingGatewayModel || GATEWAY_DEFAULT_MODEL, direct: false };
 }
 
 const ExtractedRow = z.object({
@@ -151,7 +163,7 @@ export function parseJsonAnswer(text: string): z.infer<typeof ExtractionResult> 
  * gateway/provider routes do not accept output_config), ask for plain JSON text
  * and validate it with the same schema.
  */
-async function callModel(ai: AiConn, system: Anthropic.TextBlockParam[], userText: string): Promise<z.infer<typeof ExtractionResult> | 'refusal'> {
+async function callModelOnce(ai: AiConn, system: Anthropic.TextBlockParam[], userText: string): Promise<z.infer<typeof ExtractionResult> | 'refusal'> {
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: userText }];
   try {
     const response = ai.direct
@@ -177,6 +189,27 @@ async function callModel(ai: AiConn, system: Anthropic.TextBlockParam[], userTex
   const parsed = parseJsonAnswer(text);
   if (!parsed) throw new Error(`invalid_json_answer: ${text.slice(0, 120)}`);
   return parsed;
+}
+
+/** callModelOnce, walking the gateway fallback list while the team is refused the model. */
+async function callModel(ai: AiConn, system: Anthropic.TextBlockParam[], userText: string): Promise<z.infer<typeof ExtractionResult> | 'refusal'> {
+  const chain = ai.direct ? [ai.model] : [ai.model, ...GATEWAY_FALLBACK_MODELS.filter((m) => m !== ai.model)];
+  let last: unknown;
+  for (const model of chain) {
+    try {
+      const out = await callModelOnce({ ...ai, model }, system, userText);
+      if (!ai.direct && model !== ai.model) {
+        console.log(`[ai] model ${ai.model} refused for this team, using ${model}`);
+        workingGatewayModel = model;
+        ai.model = model;
+      }
+      return out;
+    } catch (e) {
+      if (ai.direct || !modelRefused(e)) throw e;
+      last = e;
+    }
+  }
+  throw last;
 }
 
 function describeError(e: unknown): string {

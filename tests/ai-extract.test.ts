@@ -128,4 +128,26 @@ describe('AI extraction through Vercel AI Gateway', () => {
     expect(r.results.get(2)).toMatchObject({ phone: '0555123456', customer_name: 'Karim', wilaya_code: 16 });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('switches to a model the free tier serves when the default one is refused', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'A_REMPLACER');
+    vi.stubEnv('AI_GATEWAY_API_KEY', 'gw-test');
+    const seen: string[] = [];
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      seen.push(body.model);
+      if (body.model === 'anthropic/claude-haiku-5.5') {
+        return new Response(JSON.stringify({ error: { message: 'Free tier users do not have access to this model. Add AI Gateway credits', type: 'forbidden' } }), { status: 403, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        id: 'msg_4', type: 'message', role: 'assistant', model: body.model, stop_reason: 'end_turn', stop_sequence: null,
+        content: [{ type: 'text', text: JSON.stringify({ orders: [] }) }], usage: { input_tokens: 1, output_tokens: 1 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { extractRowsWithAI } = await import('@/lib/integrations/google-sheets/ai-extract');
+    const r = await extractRowsWithAI([{ row: 2, cells: { A: 'x' } }], []);
+    expect(r.errors).toEqual([]);
+    expect(seen.slice(0, 2)).toEqual(['anthropic/claude-haiku-5.5', 'google/gemini-3.5-flash-lite']);
+  });
 });
