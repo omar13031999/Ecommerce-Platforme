@@ -57,7 +57,7 @@ storage · 0012 auth metadata sync · 0013 fixes · 0014 search_path · **0015 c
 (auto-convert old REST Navex)** · **0017 provider stock mirror** · **0018 import incomplete orders** · **0019 confirmer
 workspace (`update_order_items`, `clear_import_review`)** · **0020 reset sheet back-off** · **0021 `postponed` enum** ·
 **0022 postpone + reminders, owner-only `delete_orders`, agent defaults, `products.create`** · **0023 phone blacklist +
-saved filters** · **0024 `product_provider_links`** · **0025 auto-convert REST "Maystro" provider**.
+saved filters** · **0024 `product_provider_links`** · **0025 auto-convert REST "Maystro" provider** · **0026 `ai_reimport_order`**.
 
 ### Tests
 ```bash
@@ -93,9 +93,11 @@ ECOTRACK order cannot be deleted). `maystro.live.ts` and `stock.live.ts` are rea
 * **Incomplete rows are imported** (placeholder name/product, `needs_review` + reason); resyncs never blank values
   corrected by confirmers; stable fingerprint id when no order-id column.
 * Optional **AI extraction** per source ("Extraction intelligente par IA"): new rows only, batches of 15, max 60/sync,
-  via **Vercel AI Gateway** (OIDC, model `anthropic/claude-haiku-5.5`) or direct Anthropic key. Falls back to column
-  mapping. Needs the Vercel team's AI Gateway free credits unlocked (payment method on Vercel). Not yet observed on a
-  real new row.
+  via **Vercel AI Gateway** (OIDC) or direct Anthropic key. The gateway free tier refuses Claude models ("Free tier users
+  do not have access to this model"), so the code walks a fallback list and uses the first model served (live:
+  `google/gemini-2.5-flash-lite`, verified 2026-11-28: 15/15 rows extracted). Structured output first, plain-JSON
+  fallback. Untouched "scattered" orders (status new, needs_review) are re-extracted (`ai_reimport_order`, 0026).
+  The cron logs `[ai] self-test: …` once per instance and `ai_error` in the sheet stats.
 
 **Navex = ECOTRACK** (`adapters/ecotrack.ts`, docs: Postman collection 14517169/Tz5je15g)
 * Bearer token (validate/token needs `api_token` query). Create (`create/order`, query params), **auto "Expédier"
@@ -127,7 +129,7 @@ deletions), owner account page (password change), branded UI (dark sidebar, pill
    37328030000013, cancelled with `PATCH /shared/status/{id}/ {"status":50,"abort_reason":21}`).
 2. **Navex auto-ship**: first real submission after commit `7f6d486` must be checked in the Navex panel (expected to leave
    "Colis prêt"; exact label of the next state not confirmed).
-3. **AI extraction**: confirm on the first new sheet row (cron logs: `[cron] sheets <id>: {"ai_rows":…}`).
+3. **AI extraction**: works (free-tier fallback model). Buying AI Gateway credits would let it use Claude Haiku.
 4. **Security hygiene**: delete `OWNER_TEMP_PASSWORD` after password change; several carrier/API keys were pasted in
    chat by the owner → they must be **regenerated** (Maystro token, `ak_…`, two long secrets of unknown origin).
 5. **Plan/backups**: Vercel Hobby is non-commercial per Vercel terms (Pro recommended); Supabase free plan has no
