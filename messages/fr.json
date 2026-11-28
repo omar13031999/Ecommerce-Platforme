@@ -848,6 +848,8 @@
     "invalid_json": "JSON invalide",
     "provider_auth_sheet": "La feuille n’est pas partagée publiquement (lecteur avec le lien).",
     "invalid_items": "Produits invalides : chaque ligne doit avoir un produit, une quantité ≥ 1 et un prix.",
+    "invalid_price": "Prix invalide.",
+    "discount_too_high": "La remise dépasse le montant de la commande.",
     "product_not_found": "Produit introuvable ou archivé.",
     "invalid_postpone_date": "Date de rappel invalide (dans le futur, 6 mois maximum)."
   },

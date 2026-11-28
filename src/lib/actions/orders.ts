@@ -43,6 +43,8 @@ const customerSchema = z.object({
   address: z.string().trim().max(500).optional().default(''),
   delivery_type: z.enum(['home', 'stopdesk']),
   customer_notes: z.string().trim().max(2000).optional(),
+  delivery_fee: z.coerce.number().min(0).max(100_000).optional(),
+  discount: z.coerce.number().min(0).max(100_000_000).optional(),
 });
 
 export async function updateOrderCustomer(input: { orderId: string; version?: number; patch: unknown }) {

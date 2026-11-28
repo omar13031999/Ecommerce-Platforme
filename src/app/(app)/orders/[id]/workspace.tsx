@@ -42,16 +42,19 @@ export function ConfirmationWorkspace({
   const router = useRouter();
   const [c, setC] = useState<Customer>({ ...initial, customer_name: initial.customer_name === PLACEHOLDER_NAME ? '' : initial.customer_name });
   const [lines, setLines] = useState<Line[]>(() => items.map((i, n) => ({ ...i, key: i.id ?? `n${n}` })));
+  const [fee, setFee] = useState(deliveryFee);
+  const [disc, setDisc] = useState(discount);
   const [saving, setSaving] = useState(false);
   const [currentVersion, setCurrentVersion] = useState(version);
 
   const initialLines = useMemo(() => JSON.stringify(items.map((i) => [i.id, i.product_id, i.product_name, i.quantity, i.unit_price])), [items]);
   const customerDirty = JSON.stringify(c) !== JSON.stringify({ ...initial, customer_name: initial.customer_name === PLACEHOLDER_NAME ? '' : initial.customer_name });
   const linesDirty = JSON.stringify(lines.map((i) => [i.id, i.product_id, i.product_name, i.quantity, i.unit_price])) !== initialLines;
-  const dirty = customerDirty || linesDirty;
+  const pricingDirty = fee !== deliveryFee || disc !== discount;
+  const dirty = customerDirty || linesDirty || pricingDirty;
 
   const subtotal = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
-  const total = subtotal + deliveryFee - discount;
+  const total = subtotal + fee - disc;
   const set = <K extends keyof Customer>(k: K, v: Customer[K]) => setC((p) => ({ ...p, [k]: v }));
   const missing = {
     customer_name: !c.customer_name.trim(),
@@ -68,8 +71,8 @@ export function ConfirmationWorkspace({
     setSaving(true);
     try {
       let v = currentVersion;
-      if (customerDirty) {
-        const r = await updateOrderCustomer({ orderId, version: v, patch: { ...c, wilaya_code: c.wilaya_code ?? null } });
+      if (customerDirty || pricingDirty) {
+        const r = await updateOrderCustomer({ orderId, version: v, patch: { ...c, wilaya_code: c.wilaya_code ?? null, delivery_fee: fee, discount: disc } });
         if (!r.ok) { toast.error(t.has(`errors.${r.error}`) ? t(`errors.${r.error}`) : t('errors.unknown')); return null; }
         v = r.data ?? v;
       }
@@ -173,8 +176,10 @@ export function ConfirmationWorkspace({
         <Button type="button" size="sm" variant="outline" className="w-fit" onClick={() => setLines((ls) => [...ls, { key: `n${Date.now()}`, product_id: null, product_name: '', sku: null, quantity: 1, unit_price: 0 }])}><Plus />{t('orders.addProduct')}</Button>
         <div className="grid justify-end gap-0.5 text-end text-sm">
           <span className="text-muted-foreground">{t('orders.subtotal')} : <span className="tabular">{formatDZD(subtotal, locale)}</span></span>
-          <span className="text-muted-foreground">{t('orders.deliveryFee')} : <span className="tabular">{formatDZD(deliveryFee, locale)}</span></span>
-          {discount > 0 ? <span className="text-muted-foreground">{t('orders.discount')} : <span className="tabular">−{formatDZD(discount, locale)}</span></span> : null}
+          <label className="flex items-center justify-end gap-2 text-muted-foreground">{t('orders.deliveryFee')}
+            <Input type="number" min={0} step={50} className="tabular h-8 w-28" value={fee} onChange={(e) => setFee(Math.max(0, Number(e.target.value) || 0))} /></label>
+          <label className="flex items-center justify-end gap-2 text-muted-foreground">{t('orders.discount')}
+            <Input type="number" min={0} step={50} className="tabular h-8 w-28" value={disc} onChange={(e) => setDisc(Math.max(0, Number(e.target.value) || 0))} /></label>
           <span className="font-semibold">{t('orders.totalAmount')} : <span className="tabular">{formatDZD(total, locale)}</span></span>
         </div>
       </section>
